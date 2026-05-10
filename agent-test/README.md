@@ -20,8 +20,8 @@ Use the versions below for the smoothest setup on Windows:
 
 | Component | Recommended | Notes |
 | --- | --- | --- |
-| Windows | Windows 10 or Windows 11 | Current development was validated on Windows |
-| Python | 3.13.12 x64 | Stable and already validated in this repository |
+| Windows | Windows 10 or Windows 11 | This test harness is Windows-oriented because its MCP config points at a Windows virtual environment path |
+| Python | Stable CPython 3.11, 3.12, or 3.13 x64 | Avoid preview or alpha interpreters |
 | Supported Python range | 3.11+ | Declared by the project |
 | KiCad | 10.x | Current KiPilot baseline is KiCad 10 PCB-first |
 | `kicad-python` | `>=0.7.1` | Runtime dependency |
@@ -36,7 +36,7 @@ Use the versions below for the smoothest setup on Windows:
 Install the following before using this workspace:
 
 1. Git
-2. Python 3.13.12 x64 from python.org
+2. A stable Python 3.11+ x64 release from python.org
 3. KiCad 10.x
 4. Microsoft Visual C++ Redistributable 2015-2022 x64
 5. VS Code with GitHub Copilot / Copilot Chat and MCP support enabled
@@ -44,23 +44,31 @@ Install the following before using this workspace:
 ## One-Time KiPilot Server Setup
 
 This test workspace expects the actual KiPilot server source to stay in the parent repository.
-Run the setup commands below once from this `agent-test` folder.
+Run the setup command below once from this `agent-test` folder.
 
 ```powershell
 Push-Location ..
-py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\start-kipilot-mcp.ps1 -SkipRun
+Pop-Location
+```
+
+The helper creates or reuses the parent `.venv`, installs the KiPilot runtime package, and leaves the server stopped so VS Code can launch it through MCP.
+
+For development work, install the optional test and lint dependencies from the parent repository:
+
+```powershell
+Push-Location ..
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 Pop-Location
 ```
 
-What this installs into the parent `.venv`:
+What the runtime setup installs into the parent `.venv`:
 
 - `kipilot-mcp` in editable mode
 - runtime dependencies:
   - `kicad-python>=0.7.1`
   - `mcp>=1.8.0`
-- optional development dependencies:
+- optional development dependencies when you run the editable development install:
   - `pytest>=8.3.0`
   - `pytest-asyncio>=0.24.0`
   - `ruff>=0.8.0`
@@ -98,7 +106,7 @@ It is configured to start the sibling KiPilot server with:
 - log file: `.logs/kipilot-agent-test.log`
 - mutations: disabled by default
 
-That means this test workspace is safe by default for exploration and dry-run previews.
+The parent `.venv` path is an intentional test-workspace convention so the checked-in MCP configuration can point at a predictable interpreter. It is not a general KiPilot requirement. This workspace is safe by default for exploration and dry-run previews.
 
 ## How To Start The MCP Server In VS Code
 

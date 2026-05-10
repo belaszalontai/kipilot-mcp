@@ -11,6 +11,15 @@ $repoRoot = Split-Path -Parent $PSCommandPath
 $venvPath = Join-Path $repoRoot ".venv"
 $venvPython = Join-Path $venvPath "Scripts\python.exe"
 
+function Write-KiPilotStatus {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    [Console]::Error.WriteLine($Message)
+}
+
 function New-KiPilotVirtualEnvironment {
     $pyCommand = Get-Command py -ErrorAction SilentlyContinue
     if ($null -ne $pyCommand) {
@@ -20,7 +29,7 @@ function New-KiPilotVirtualEnvironment {
                 continue
             }
 
-            Write-Host "Creating .venv with Python $version..."
+            Write-KiPilotStatus "Creating .venv with Python $version..."
             & $pyCommand.Source "-$version" -m venv $venvPath
             if ($LASTEXITCODE -eq 0 -and (Test-Path $venvPython)) {
                 return
@@ -35,7 +44,7 @@ function New-KiPilotVirtualEnvironment {
         )
     }
 
-    Write-Host "Creating .venv with the default python command..."
+    Write-KiPilotStatus "Creating .venv with the default python command..."
     & $pythonCommand.Source -m venv $venvPath
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $venvPython)) {
         throw "Virtual environment creation failed."
@@ -52,7 +61,7 @@ function Test-KiPilotRuntimeInstalled {
 }
 
 function Install-KiPilotRuntime {
-    Write-Host "Installing KiPilot MCP runtime dependencies into .venv..."
+    Write-KiPilotStatus "Installing KiPilot MCP runtime dependencies into .venv..."
     & $venvPython -m pip install --upgrade pip
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to upgrade pip inside .venv."
@@ -103,11 +112,11 @@ try {
     }
 
     if ($SkipRun) {
-        Write-Host "KiPilot MCP environment is ready. Launch skipped because -SkipRun was specified."
+        Write-KiPilotStatus "KiPilot MCP environment is ready. Launch skipped because -SkipRun was specified."
         return
     }
 
-    Write-Host "Starting KiPilot MCP server..."
+    Write-KiPilotStatus "Starting KiPilot MCP server..."
     & $venvPython -m kipilot_mcp.server
     if ($LASTEXITCODE -ne 0) {
         throw "The KiPilot MCP server exited with code $LASTEXITCODE."

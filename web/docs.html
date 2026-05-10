@@ -34,7 +34,7 @@
           <a class="is-active" href="docs.html">Docs</a>
           <a href="changelog.html">Changelog</a>
           <a href="index.html#github">GitHub</a>
-          <a href="index.html#download">Download</a>
+          <a href="index.html#download">Install</a>
         </nav>
       </header>
 
@@ -135,7 +135,7 @@
                 <div class="docs-note">
                   <h3>Validated baseline</h3>
                   <ul class="docs-list">
-                    <li>Python 3.11+ supported, with Python 3.13.12 validated locally on Windows.</li>
+                    <li>Python 3.11+ supported. Use a stable CPython 3.11, 3.12, or 3.13 release.</li>
                     <li>KiCad 10.x is the documented target for the current tool surface.</li>
                     <li>One running KiCad instance at a time is strongly recommended during setup and debugging.</li>
                     <li>Board-context tools assume the PCB Editor endpoint is available, not only the Project Manager.</li>
@@ -154,8 +154,8 @@
               </div>
 
               <p>
-                Use a stable Python release. Earlier local installation failures were caused by a
-                Python 3.15 alpha interpreter without the required wheel coverage for the dependency chain.
+                Avoid preview or alpha Python interpreters because the native dependency chain may not
+                publish compatible wheels for them yet.
               </p>
             </section>
 
@@ -217,16 +217,34 @@
 
             <section class="docs-section reveal" id="setup">
               <span class="eyebrow">Installation</span>
-              <h2>Create a local environment, install KiPilot, and verify that KiCad is already running.</h2>
+              <h2>Install KiPilot from the cloned repository and verify that KiCad is already running.</h2>
               <p>
-                KiPilot is intended to be run from a virtual environment. Install it in editable mode for local development
-                or repository-based usage, then point your MCP host at that environment.
+                Use an isolated Python environment when possible. A virtual environment is recommended
+                because it keeps KiPilot's runtime dependencies separate from system Python, but it is not
+                a product requirement if your team already manages Python environments another way.
               </p>
 
-              <pre class="code-block"><code>py -3.13 -m venv .venv
+              <h3>Windows helper</h3>
+              <pre class="code-block"><code>.\start-kipilot-mcp.ps1 -SkipRun</code></pre>
+
+              <p>
+                The helper creates or reuses <span class="inline-code">.venv</span>, installs the KiPilot runtime package,
+                applies conservative default environment variables, and exits before starting the server.
+                Run the same script without <span class="inline-code">-SkipRun</span> for a manual terminal launch.
+              </p>
+
+              <h3>Manual install</h3>
+              <pre class="code-block"><code>python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"</code></pre>
+python -m pip install .</code></pre>
+
+              <p>
+                On macOS or Linux, activate the environment with <span class="inline-code">source .venv/bin/activate</span>.
+                For development, install the editable package with test and lint dependencies:
+              </p>
+
+              <pre class="code-block"><code>python -m pip install -e ".[dev]"</code></pre>
 
               <p>
                 You can run the server directly for manual checks, although most users will launch it through their MCP host:
@@ -1023,7 +1041,7 @@ KIPILOT_LOG_FILE=.logs/kipilot-mcp.log</code></pre>
           <a href="#overview">Overview</a>
           <a href="#tool-reference">Tools</a>
           <a href="changelog.html">Changelog</a>
-          <a href="index.html#download">Download</a>
+          <a href="index.html#download">Install</a>
         </div>
 
         <p class="footer-note">© <span id="current-year">2026</span> by Béla Szalontai</p>

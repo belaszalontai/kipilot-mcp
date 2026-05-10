@@ -2501,7 +2501,9 @@ class FakeBoard:
         _ = types
         return [FakeTrack(), FakeVia(), FakePad()]
 
-    def get_items_by_netclass(self, net_classes: str | list[str], types: object | None = None) -> list[object]:
+    def get_items_by_netclass(
+        self, net_classes: str | list[str], types: object | None = None
+    ) -> list[object]:
         _ = types
         names = net_classes if isinstance(net_classes, list) else [net_classes]
         normalized_names = {str(name).strip().lower() for name in names}
@@ -2536,7 +2538,9 @@ class FakeBoard:
                 )
         return result
 
-    def get_connected_items(self, items: object | list[object], types: object | None = None) -> list[object]:
+    def get_connected_items(
+        self, items: object | list[object], types: object | None = None
+    ) -> list[object]:
         _ = types
         resolved_items = items if isinstance(items, list) else [items]
         item_ids = {str(getattr(item, "id", item)) for item in resolved_items}

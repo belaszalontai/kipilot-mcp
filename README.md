@@ -1,6 +1,10 @@
+<p align="center">
+	<img src="web/KiPilot.svg" alt="KiPilot MCP">
+</p>
+
 # KiPilot MCP
 
-KiPilot MCP is a Python-based Model Context Protocol server that connects MCP-aware clients, such as GitHub Copilot in VS Code, to a user-controlled KiCad 10.x session through the official `kicad-python` IPC binding.
+KiPilot is a Python-based Model Context Protocol (MCP) server that connects MCP-aware clients, such as GitHub Copilot in VS Code, to a user-controlled KiCad 10.x PCB Editor session through the official `kicad-python` IPC binding.
 
 The server runs over `stdio`, exposes board-aware MCP tools, and is designed for live KiCad PCB workflows where the user keeps full control of the GUI session.
 
@@ -41,21 +45,47 @@ Committed baseline:
 - KiCad 10.x installed locally
 - A running KiCad GUI instance with IPC API support
 
-Prefer a stable Python release. This repository was validated locally with Python 3.13.12 on Windows.
+Use a stable CPython release such as 3.11, 3.12, or 3.13. Avoid preview or alpha Python interpreters because the native dependency chain may not publish wheels for them yet.
 
 ## Quick Start
 
-Create and activate a virtual environment:
+Clone the public repository:
 
 ```powershell
-py -3.13 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+git clone https://github.com/belaszalontai/kipilot.git
+cd kipilot
 ```
 
-Install the project in editable mode with development dependencies:
+### Windows helper
+
+On Windows, the repository includes a convenience script that creates `.venv` when needed, installs the runtime package, applies conservative default environment variables, and can start the server for manual checks:
 
 ```powershell
+.\start-kipilot-mcp.ps1 -SkipRun
+```
+
+Run without `-SkipRun` to start the server process directly from a terminal:
+
+```powershell
+.\start-kipilot-mcp.ps1
+```
+
+For VS Code, Claude Desktop, and other MCP hosts, prefer configuring the host to launch `python -m kipilot_mcp.server` directly from the prepared environment. That keeps the stdio server command explicit and easy to audit.
+
+### Manual install
+
+A virtual environment is recommended for dependency isolation, but it is not a KiPilot-specific requirement. If you already manage Python environments another way, point your MCP host at that interpreter instead.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
+python -m pip install .
+```
+
+For development and tests, install in editable mode with development dependencies:
+
+```powershell
 python -m pip install -e ".[dev]"
 ```
 
@@ -92,7 +122,7 @@ Operational notes:
 
 ## Running The Server
 
-After activating the virtual environment, run:
+After installation, run:
 
 ```powershell
 kipilot-mcp
@@ -126,7 +156,15 @@ Example VS Code MCP configuration:
 
 If your KiCad setup requires an explicit API socket or token, add `KICAD_API_SOCKET` and `KICAD_API_TOKEN` to the same `env` block.
 
+The bundled `start-kipilot-mcp.ps1` script is useful for first-run setup and manual terminal checks on Windows. MCP host configuration should normally use the direct Python command shown above so the host owns process startup and environment values.
+
 ## Development
+
+Install development dependencies:
+
+```powershell
+python -m pip install -e ".[dev]"
+```
 
 Run tests:
 
@@ -183,7 +221,7 @@ The `web/` directory contains the static project website and public-facing docum
 - `script.js`: lightweight client-side behavior such as reveal animations and dynamic year handling
 - `KiPilot.svg`: shared logo and branding asset
 
-In practice, this folder is the repository's static presentation layer. It is separate from the Python MCP server so the product site, docs, and changelog can evolve independently from the runtime code.
+This folder is the repository's static presentation layer. It is separate from the Python MCP server so the product site, docs, and changelog can evolve independently from the runtime code.
 
 ## The `agent-test/` Folder
 

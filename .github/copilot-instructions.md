@@ -1,7 +1,7 @@
 # GitHub Copilot / Agent Instructions: KiCad MCP Server Development
 
 ## Role and Context
-You are an expert Python developer with deep knowledge of the Model Context Protocol (MCP) and the KiCad EDA IPC API. We are building an MCP server in Python that connects VSCode/Copilot to a running KiCad 10.x instance to enable agentic hardware development.
+You are an expert Python developer with deep knowledge of the Model Context Protocol (MCP) and the KiCad EDA IPC API. We are building an MCP server in Python that connects VS Code/Copilot to a running KiCad 10.x instance to enable agentic hardware development.
 
 ## Development Rules & Guidelines
 
@@ -12,7 +12,7 @@ You are an expert Python developer with deep knowledge of the Model Context Prot
    - Keep MCP tool handlers async. Wrap blocking `kipy` calls with `asyncio.to_thread` when needed.
 
 2. **Architecture Requirements:**
-   - The server must run over `stdio` to integrate seamlessly with VSCode's MCP client configuration.
+   - The server must run over `stdio` to integrate seamlessly with VS Code's MCP client configuration.
    - Implement a `KiCadIpcClient` wrapper around `kipy.KiCad` for connection handling and user-friendly error messages.
    - Expose MCP Tools using the `@mcp.tool()` decorator provided by the MCP SDK.
 

@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>KiPilot | Free MCP bridge for live KiCad workflows</title>
+    <title>KiPilot | MCP bridge for live KiCad PCB workflows</title>
     <meta
       name="description"
-      content="KiPilot is a free public GitHub MCP server that connects design agents to a live KiCad workflow through the official IPC path."
+      content="KiPilot is an open-source MCP server that connects design agents to a live KiCad PCB workflow through the official IPC path."
     >
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,7 +34,7 @@
           <a href="docs.html">Docs</a>
           <a href="changelog.html">Changelog</a>
           <a href="#github">GitHub</a>
-          <a href="#download">Download</a>
+          <a href="#download">Install</a>
         </nav>
       </header>
 
@@ -42,16 +42,17 @@
         <section class="hero section">
           <div class="hero__copy reveal is-visible">
             <div class="eyebrow-row">
-              <p class="eyebrow eyebrow--main">Public KiCad MCP server</p>
+              <p class="eyebrow eyebrow--main">Open KiCad MCP server</p>
             </div>
 
             <h1>Connect your design agents to the KiCad session already on screen.</h1>
 
             <p class="hero__lede">
-              KiPilot is a free public GitHub MCP server that lets GitHub Copilot,
-              Claude, and other MCP-aware agents work against a live KiCad workflow
-              through the official IPC path. An agent can design for you or help you
-              design while you watch every change happen in the KiCad UI.
+              KiPilot is an open-source MCP server that lets GitHub Copilot,
+              Claude, and other MCP-aware agents work against a live KiCad PCB workflow
+              through the official IPC path. Agents can inspect board context, preview
+              controlled edits, and apply approved changes while the KiCad UI remains the
+              source of truth.
             </p>
           </div>
         </section>
@@ -176,17 +177,17 @@
         <section class="section github-section reveal" id="github">
           <div class="section-heading section-heading--wide">
             <p class="eyebrow eyebrow--main">GitHub</p>
-            <h2>A public GitHub repository that shows exactly what Copilot can ask for.</h2>
+            <h2>A public GitHub repository that shows exactly what an MCP host can call.</h2>
             <p>
-              This section should make the free and public nature obvious: the server is
-              inspectable, available to anyone, and built around a concrete MCP tool surface.
+              The server is inspectable, installable from source, and built around a concrete
+              MCP tool surface rather than an opaque desktop automation layer.
             </p>
           </div>
 
           <div class="github-simple">
             <p>
               KiPilot is published as an open repository so teams can inspect the code,
-              run it locally, and understand the MCP surface before they connect an agent.
+              run it on their own machines, and understand the MCP surface before they connect an agent.
             </p>
 
             <ul class="github-list">
@@ -196,36 +197,36 @@
             </ul>
 
             <div class="github-cta">
-              <a class="button button--primary" href="https://github.com" target="_blank" rel="noreferrer">Open GitHub repository</a>
+              <a class="button button--primary" href="https://github.com/belaszalontai/kipilot" target="_blank" rel="noreferrer">Open GitHub repository</a>
             </div>
           </div>
         </section>
 
         <section class="section download-section reveal" id="download">
           <div class="section-heading section-heading--wide">
-            <p class="eyebrow eyebrow--main">Download</p>
-            <h2>Free download.</h2>
+            <p class="eyebrow eyebrow--main">Install</p>
+            <h2>Install from source.</h2>
             <p>
-              KiPilot is free for everyone. The user installs or clones the MCP server,
-              opens their own KiCad environment, and lets Copilot work against that live
-              context.
+              KiPilot is distributed as a public source repository. Clone it, install the
+              Python package into an environment you control, then point your MCP host at
+              the stdio server command.
             </p>
           </div>
 
           <div class="github-simple">
             <p>
-              Use the same download entry point whether you want to inspect the code,
-              install the server locally, or wire it into your preferred MCP client.
+              Use the repository as the entry point for code review, local installation,
+              issue tracking, and MCP host setup.
             </p>
 
             <ul class="github-list">
-              <li>Free public MCP server for live KiCad workflows</li>
+              <li>Open-source MCP server for live KiCad workflows</li>
               <li>Works with the same local KiCad session you already use</li>
-              <li>Later you can replace this placeholder with the final release URL</li>
+              <li>Includes a Windows helper script and manual installation steps</li>
             </ul>
 
             <div class="github-cta">
-              <a class="button button--primary" href="#">Free download placeholder</a>
+              <a class="button button--primary" href="docs.html#setup">Read install docs</a>
             </div>
           </div>
         </section>
@@ -238,7 +239,7 @@
 
         <div class="footer-links">
           <a href="#github">GitHub</a>
-          <a href="#download">Download</a>
+          <a href="#download">Install</a>
         </div>
 
         <p class="footer-note">© <span id="current-year">2026</span> by Béla Szalontai</p>

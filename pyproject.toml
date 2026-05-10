@@ -9,12 +9,30 @@ description = "Model Context Protocol server for connecting AI agents to a runni
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
-  { name = "Kipilot MCP contributors" }
+  { name = "KiPilot MCP contributors" }
+]
+license = { file = "LICENSE" }
+keywords = ["kicad", "mcp", "model-context-protocol", "pcb", "eda"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)"
 ]
 dependencies = [
   "kicad-python>=0.7.1",
   "mcp>=1.8.0"
 ]
+
+[project.urls]
+Homepage = "https://github.com/belaszalontai/kipilot"
+Repository = "https://github.com/belaszalontai/kipilot"
+Documentation = "https://github.com/belaszalontai/kipilot/tree/main/web"
+Issues = "https://github.com/belaszalontai/kipilot/issues"
 
 [project.optional-dependencies]
 dev = [

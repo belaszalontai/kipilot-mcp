@@ -46,7 +46,7 @@ Important version gates from the official KiCad IPC documentation:
 | Project metadata | Supported | We can read project name/path, net classes, text variables, and expand project variables. |
 | Board metadata | Supported | We can read board name, document info, active layer, visible/enabled layers, origins, title block, stackup, and editor appearance settings. |
 | Footprints | Supported | We can list footprints, fields, positions, orientation, layers, lock state, attributes, 3D model references, and footprint-level overrides. |
-| Pads and pad geometry | Supported | We can inspect pads, padstacks, drill settings, copper-layer presence, and polygonized pad shapes. |
+| Pads and pad geometry | Supported | We can inspect pads and padstack layer membership today; specialized drill, copper-layer-presence, and polygonized pad-shape helpers remain future wrappers. |
 | Nets and connectivity | Supported | We can read nets, net classes, items by net, items by net class, and copper-connected items. |
 | Tracks and vias | Supported | We can list and modify existing tracks and vias, and create/delete board items through the generic item APIs. |
 | Zones | Supported | We can inspect zones, outlines, filled polygons, priorities, settings, and trigger zone refill. |
@@ -65,7 +65,7 @@ KiPilot currently exposes a substantial KiCad 10 PCB-first MCP surface, but it i
 
 Meaningful areas still not fully wrapped as MCP tools include:
 
-- pad geometry helpers beyond basic pad listing
+- pad geometry helpers beyond basic pad listing and layer membership
 - dimensions, groups, reference images, and barcodes
 - selection and editor-state manipulation beyond visible/enabled layers, active layer, and board origins
 - project text-variable mutation helpers
@@ -87,6 +87,7 @@ Audit inputs:
 Status rules used in the audit:
 
 - `Implemented`: the capability is available today through the current MCP surface, even if some low-level binding methods remain internal implementation details
+- `Partially implemented`: part of the capability is available today, but dedicated helpers are still needed for the full user-facing workflow
 - `Missing`: the capability exists in the current KiCad 10 + `kicad-python` baseline and fits the repository scope, but no dedicated MCP tool exposes it yet
 - `Intentionally omitted`: the capability or method exists, but the server deliberately does not expose it because it is internal plumbing, too generic, unsafe, poor for autonomous workflows, or outside the product contract
 
@@ -112,7 +113,7 @@ Important interpretation rule:
 | Enabled layer read | `Board.get_enabled_layers` | Implemented | Returned by `kicad_get_stackup` |
 | Enabled layer write | `Board.set_enabled_layers` | Implemented | `kicad_set_enabled_layers` exposes a constrained non-copper-layer wrapper with a force guard for live changes |
 | Footprint lookup and placement | `Board.get_footprints`, `update_items` | Implemented | `kicad_get_footprints`, `kicad_find_footprints`, `kicad_move_footprint`, `kicad_rotate_footprint` |
-| Pads and pad geometry | `Board.get_pads`, `check_padstack_presence_on_layers`, `get_pad_shapes_as_polygons` | Missing | `kicad_get_pads` now exposes basic pad lookup, but padstack layer-presence and polygonized shape helpers are still missing |
+| Pads and pad geometry | `Board.get_pads`, `check_padstack_presence_on_layers`, `get_pad_shapes_as_polygons` | Partially implemented | `kicad_get_pads` exposes pad lookup and padstack layer membership; dedicated drill, layer-presence check, and polygonized shape helpers are still missing |
 | Nets and items by net | `Board.get_nets`, `get_items_by_net` | Implemented | `kicad_get_nets`, `kicad_get_items_by_net` |
 | Net-class and connectivity queries | `Board.get_items_by_netclass`, `get_netclass_for_nets`, `get_connected_items` | Implemented | `kicad_get_items_by_netclass`, `kicad_get_netclass_for_nets`, `kicad_get_connected_items` |
 | Tracks, vias, and zones inspection/edit/delete/refill | `Board.get_tracks`, `get_vias`, `get_zones`, `create_items`, `update_items`, `remove_items`, `refill_zones` | Implemented | `kicad_get_tracks`, `kicad_get_vias`, `kicad_get_zones`, `kicad_create_track_segments`, `kicad_create_via`, `kicad_update_track_geometry`, `kicad_update_zone_outline`, `kicad_update_items`, `kicad_delete_items`, `kicad_refill_zones` |
@@ -137,7 +138,7 @@ Important interpretation rule:
 
 Highest-value `Missing` areas for the next closure passes:
 
-- pad geometry helpers beyond basic pad listing
+- pad geometry helpers beyond basic pad listing and layer membership
 - dimensions, groups, reference images, and barcodes
 - selection and editor-state tools
 - project text-variable mutation helpers

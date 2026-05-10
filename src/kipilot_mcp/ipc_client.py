@@ -1666,7 +1666,9 @@ class KiCadIpcClient:
             if serialize_identifier(getattr(item, "id", "")).strip().lower() != source_item_id
         ]
         if resolved_layer is not None:
-            resolved_items = [item for item in resolved_items if item_matches_layer(item, resolved_layer)]
+            resolved_items = [
+                item for item in resolved_items if item_matches_layer(item, resolved_layer)
+            ]
         resolved_items = filter_items_by_area(board, resolved_items, area_filter)
 
         return {
@@ -1793,7 +1795,9 @@ class KiCadIpcClient:
             if isinstance(layer.get("id"), int)
         ]
         current_copper_layers = [
-            layer_id for layer_id in current_enabled_layer_ids if self._is_copper_layer(board, layer_id)
+            layer_id
+            for layer_id in current_enabled_layer_ids
+            if self._is_copper_layer(board, layer_id)
         ]
 
         resolved_non_copper_layers: list[int] = []
@@ -1830,7 +1834,9 @@ class KiCadIpcClient:
             set_enabled_layers(copper_layer_count, resolved_non_copper_layers)
 
         current_enabled_layers = (
-            preview_enabled_layers if dry_run else self._get_optional_layers(board, "get_enabled_layers")
+            preview_enabled_layers
+            if dry_run
+            else self._get_optional_layers(board, "get_enabled_layers")
         )
         return {
             "board": self._serialize_board(board),

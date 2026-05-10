@@ -1,10 +1,10 @@
-# Product Definition: KiCad MCP Server
+# Product Definition: KiPilot MCP
 
 ## 1. Product Vision
-The KiCad MCP (Model Context Protocol) Server acts as an intelligent bridge between GitHub Copilot running in VSCode (or any MCP-compatible client) and the KiCad EDA suite. It allows AI agents to interact with a live, running instance of KiCad via KiCad's IPC API, enabling prompt-driven hardware design and contextual querying of the board state.
+KiPilot MCP acts as an intelligent bridge between GitHub Copilot running in VS Code, or any MCP-compatible client, and the KiCad EDA suite. It allows AI agents to interact with a live, running instance of KiCad through KiCad's official IPC API, enabling prompt-driven PCB inspection and controlled board edits.
 
 ## 2. Core Architecture
-- **Client:** VSCode + GitHub Copilot (using MCP client capabilities).
+- **Client:** VS Code + GitHub Copilot, or another MCP-aware host.
 - **Middleware:** Python-based MCP Server implementing the official Anthropic MCP SDK.
 - **Target:** KiCad 10.x running locally with IPC API support. KiCad 9/10 require a running KiCad GUI instance for IPC access, but this repository targets the KiCad 10 PCB-first baseline.
 - **Communication Protocol:** 
@@ -12,7 +12,7 @@ The KiCad MCP (Model Context Protocol) Server acts as an intelligent bridge betw
   - MCP Server <-> KiCad: official `kicad-python` (`kipy`) binding over KiCad's platform IPC endpoint (named pipe on Windows, Unix domain socket on macOS/Linux)
 
 ## 3. Key Features & Capabilities (MCP Tools)
-The server will expose specific tools to the LLM, but the scope must follow the
+The server exposes a scoped tool surface to the LLM, and that scope must follow the
 official KiCad IPC API as it exists in the targeted KiCad version.
 
 ### Baseline for this repository
@@ -62,9 +62,9 @@ See `.github/kicad-api-capabilities.md` for the detailed capability map and the 
   - `asyncio`: For async MCP tool handlers and thread offloading of blocking IPC calls.
 
 ## 5. User Workflow
-1. Developer opens a firmware/hardware project in VSCode.
+1. Developer opens a firmware/hardware project in VS Code.
 2. Developer opens the corresponding board/project in KiCad 10.x.
 3. Developer asks Copilot: "List the footprints and nets on the currently open PCB."
-4. Copilot invokes the KiCad MCP Server tool.
+4. Copilot invokes the KiPilot MCP tool.
 5. The MCP server uses `kicad-python` to call the KiCad IPC API.
 6. KiCad returns the requested board context to Copilot.
