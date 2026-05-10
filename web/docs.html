@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>KiPilot Docs | MCP API and tool reference for KiCad</title>
+    <meta
+      name="description"
+      content="Comprehensive KiPilot MCP documentation covering architecture, configuration, safety controls, operational guidance, and the full KiCad tool reference."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    >
+    <link rel="stylesheet" href="styles.css">
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <div class="site-bg" aria-hidden="true">
+      <div class="site-bg__orb site-bg__orb--blue"></div>
+      <div class="site-bg__orb site-bg__orb--orange"></div>
+      <div class="site-bg__grid"></div>
+    </div>
+
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="index.html#top" aria-label="KiPilot home">
+          <img class="brand__logo" src="KiPilot.svg" alt="KiPilot">
+        </a>
+
+        <nav class="site-nav" aria-label="Primary">
+          <a class="is-active" href="docs.html">Docs</a>
+          <a href="changelog.html">Changelog</a>
+          <a href="index.html#github">GitHub</a>
+          <a href="index.html#download">Download</a>
+        </nav>
+      </header>
+
+      <main class="docs-page page-tech">
+        <section class="section docs-hero">
+          <div class="docs-hero__copy reveal is-visible">
+            <h1>MCP API and tool reference</h1>
+            <p class="hero__lede">
+              KiPilot is a stdio Model Context Protocol server for a live KiCad PCB session.
+              This page documents the transport model, runtime configuration, safety controls,
+              operational expectations, and the full tool surface exposed to MCP-aware hosts.
+            </p>
+          </div>
+        </section>
+
+        <div class="docs-shell">
+          <aside class="docs-sidebar reveal is-visible" aria-label="Docs table of contents">
+            <p class="docs-sidebar__title eyebrow">On this page</p>
+            <nav class="docs-toc">
+              <a href="#overview">Overview</a>
+              <a href="#compatibility">Compatibility</a>
+              <a href="#architecture">Architecture</a>
+              <a href="#setup">Installation</a>
+              <a href="#configuration">Configuration</a>
+              <a href="#clients">MCP hosts</a>
+              <a href="#conventions">API conventions</a>
+              <a href="#tool-reference">Tool reference</a>
+              <a href="#workflows">Example workflows</a>
+              <a href="#operations">Operations</a>
+              <a href="#troubleshooting">Troubleshooting</a>
+            </nav>
+          </aside>
+
+          <div class="docs-content">
+            <section class="docs-section reveal" id="overview">
+              <span class="eyebrow">Overview</span>
+              <h2>KiPilot exposes KiCad PCB actions as JSON-serializable MCP tools over stdio.</h2>
+              <p>
+                KiPilot is designed for MCP hosts such as GitHub Copilot in VS Code, Claude,
+                or any other client that can launch a stdio MCP server and exchange tool calls.
+                It does not expose an HTTP API, it does not launch KiCad for you, and it assumes
+                that the PCB you want to inspect or edit is already open inside a user-controlled
+                KiCad GUI session.
+              </p>
+
+              <div class="docs-grid">
+                <div class="docs-note">
+                  <h3>What KiPilot provides</h3>
+                  <ul class="docs-list">
+                    <li>Stdio MCP transport with a stable, agent-friendly tool surface.</li>
+                    <li>Read-only board inspection for documents, footprints, pads, nets, net classes, connectivity, graphics, tracks, vias, zones, standalone board text, origins, and title blocks.</li>
+                    <li>Controlled PCB mutations with dry-run previews, mutation gating, and explicit force guards for destructive actions.</li>
+                    <li>Operational logging to <span class="inline-code">stderr</span> and optionally to a file.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>What KiPilot does not provide</h3>
+                  <ul class="docs-list">
+                    <li>No headless KiCad management or GUI automation.</li>
+                    <li>No committed schematic automation baseline in the current KiCad 10 target.</li>
+                    <li>No generic unrestricted arbitrary-item updater.</li>
+                    <li>No stdout logging, because stdout is reserved for MCP protocol traffic.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <ol class="docs-steps">
+                <li>
+                  <strong>Launch KiCad yourself</strong>
+                  <span>Open the target project and the PCB Editor before running board-aware MCP tools.</span>
+                </li>
+                <li>
+                  <strong>Start KiPilot through an MCP host</strong>
+                  <span>Point the host at the KiPilot Python environment and run the stdio server module.</span>
+                </li>
+                <li>
+                  <strong>Verify reachability first</strong>
+                  <span>Use <span class="inline-code">ping_kicad</span> or <span class="inline-code">get_kicad_version</span> before any geometry or mutation request.</span>
+                </li>
+                <li>
+                  <strong>Query, preview, then apply</strong>
+                  <span>Round-trip item IDs from read tools, prefer <span class="inline-code">dry_run=true</span> first, then apply and save deliberately.</span>
+                </li>
+              </ol>
+            </section>
+
+            <section class="docs-section reveal" id="compatibility">
+              <span class="eyebrow">Compatibility</span>
+              <h2>The current baseline targets KiCad 10 PCB workflows with a running GUI instance.</h2>
+              <p>
+                KiPilot is built around the official <span class="inline-code">kicad-python</span>
+                binding and the KiCad GUI IPC endpoint. The implementation is intentionally scoped
+                to the capabilities validated against the current repository baseline.
+              </p>
+
+              <div class="docs-detail-grid">
+                <div class="docs-note">
+                  <h3>Validated baseline</h3>
+                  <ul class="docs-list">
+                    <li>Python 3.11+ supported, with Python 3.13.12 validated locally on Windows.</li>
+                    <li>KiCad 10.x is the documented target for the current tool surface.</li>
+                    <li>One running KiCad instance at a time is strongly recommended during setup and debugging.</li>
+                    <li>Board-context tools assume the PCB Editor endpoint is available, not only the Project Manager.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Scope boundaries</h3>
+                  <ul class="docs-list">
+                    <li>GUI IPC only. No committed headless or daemonized KiCad operation.</li>
+                    <li>PCB Editor first. Schematic tooling remains future or version-gated work.</li>
+                    <li>Export and plotting are not part of the current KiCad 10 baseline.</li>
+                    <li>Some queries depend on KiCad 10.0.1+ level APIs inside the running application.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <p>
+                Use a stable Python release. Earlier local installation failures were caused by a
+                Python 3.15 alpha interpreter without the required wheel coverage for the dependency chain.
+              </p>
+            </section>
+
+            <section class="docs-section reveal" id="architecture">
+              <span class="eyebrow">Architecture</span>
+              <h2>The server is a FastMCP stdio process that creates a fresh KiCad IPC client per tool call.</h2>
+              <p>
+                This design keeps tool execution isolated, aligns well with MCP host process models,
+                and keeps error boundaries simple. Blocking KiCad calls are wrapped behind an async-friendly
+                interface so MCP hosts still see normal asynchronous tool execution.
+              </p>
+
+              <pre class="code-block"><code>MCP host
+  -&gt; stdio transport
+  -&gt; KiPilot FastMCP server
+  -&gt; per-tool KiCadIpcClient
+  -&gt; official kicad-python binding
+  -&gt; running KiCad GUI IPC endpoint
+  -&gt; active project / active PCB board objects</code></pre>
+
+              <div class="docs-grid">
+                <div class="docs-note">
+                  <h3>Transport model</h3>
+                  <ul class="docs-list">
+                    <li>The public integration surface is MCP over stdio only.</li>
+                    <li>MCP hosts discover tools automatically; users normally do not handcraft raw protocol frames.</li>
+                    <li>Stdout must remain protocol-clean, which is why logs go to stderr or to a file.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Connection model</h3>
+                  <ul class="docs-list">
+                    <li>Every tool call builds a fresh runtime config and client instance.</li>
+                    <li>The server uses the official KiCad socket and token when provided.</li>
+                    <li>If those variables are absent, the binding falls back to platform defaults.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Why this matters for agents</h3>
+                  <ul class="docs-list">
+                    <li>Failures stay local to a single tool call.</li>
+                    <li>Dry-run previews can be executed without unlocking write access.</li>
+                    <li>Mutation operations can include narrow commit messages and deterministic guardrails.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Logging model</h3>
+                  <ul class="docs-list">
+                    <li>Server startup is logged once per process.</li>
+                    <li>Each tool call records start, finish, duration, and warning/error outcomes.</li>
+                    <li>Long argument payloads are summarized to keep logs useful without becoming unreadable.</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section class="docs-section reveal" id="setup">
+              <span class="eyebrow">Installation</span>
+              <h2>Create a local environment, install KiPilot, and verify that KiCad is already running.</h2>
+              <p>
+                KiPilot is intended to be run from a virtual environment. Install it in editable mode for local development
+                or repository-based usage, then point your MCP host at that environment.
+              </p>
+
+              <pre class="code-block"><code>py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"</code></pre>
+
+              <p>
+                You can run the server directly for manual checks, although most users will launch it through their MCP host:
+              </p>
+
+              <pre class="code-block"><code>kipilot-mcp
+
+# or
+python -m kipilot_mcp.server</code></pre>
+
+              <div class="docs-detail-grid">
+                <div class="docs-note">
+                  <h3>Before first use</h3>
+                  <ul class="docs-list">
+                    <li>Start KiCad and open the target project yourself.</li>
+                    <li>Open the PCB Editor, not only the project window.</li>
+                    <li>If needed in your KiCad build, enable the API under Preferences -&gt; Plugins -&gt; Enable KiCad API.</li>
+                    <li>Keep the setup simple by using one KiCad instance at a time.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Endpoint resolution</h3>
+                  <ul class="docs-list">
+                    <li>When KiCad launches an API plugin, it can provide <span class="inline-code">KICAD_API_SOCKET</span> and <span class="inline-code">KICAD_API_TOKEN</span>.</li>
+                    <li>When launching from VS Code or another host, you may need to pass those values yourself.</li>
+                    <li>If <span class="inline-code">ping_kicad</span> works but board tools do not, you are likely connected to the wrong endpoint and need the PCB Editor endpoint.</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section class="docs-section reveal" id="configuration">
+              <span class="eyebrow">Configuration</span>
+              <h2>Runtime behavior is controlled entirely by environment variables.</h2>
+              <p>
+                KiPilot reads configuration at startup and again for each tool call. That makes MCP host configuration
+                the source of truth for endpoint selection, timeouts, mutation permissions, commit prefixes, and logging.
+              </p>
+
+              <pre class="code-block"><code># Official KiCad IPC values when available
+KICAD_API_SOCKET=...
+KICAD_API_TOKEN=...
+
+# KiPilot runtime values
+KIPILOT_KICAD_CLIENT_NAME=kipilot-mcp
+KIPILOT_KICAD_TIMEOUT_MS=60000
+KIPILOT_ENABLE_MUTATIONS=0
+KIPILOT_COMMIT_MESSAGE_PREFIX=KiPilot MCP
+KIPILOT_LOG_LEVEL=INFO
+KIPILOT_LOG_FILE=.logs/kipilot-mcp.log</code></pre>
+
+              <div class="docs-grid">
+                <div class="docs-note">
+                  <h3>Endpoint and identity settings</h3>
+                  <ul class="docs-list">
+                    <li><span class="inline-code">KICAD_API_SOCKET</span>: explicit socket or named-pipe endpoint when the default is not correct.</li>
+                    <li><span class="inline-code">KICAD_API_TOKEN</span>: token for KiCad API authentication when provided by KiCad.</li>
+                    <li><span class="inline-code">KIPILOT_KICAD_CLIENT_NAME</span>: the logical client name sent to KiCad. Defaults to <span class="inline-code">kipilot-mcp</span>.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Performance and timeout settings</h3>
+                  <ul class="docs-list">
+                    <li><span class="inline-code">KIPILOT_KICAD_TIMEOUT_MS</span>: IPC timeout in milliseconds. Default is <span class="inline-code">60000</span>.</li>
+                    <li>The default is intentionally high because zone refills and some board operations can take tens of seconds on large designs.</li>
+                    <li>Increase the timeout further on slower machines or unusually large boards.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Mutation controls</h3>
+                  <ul class="docs-list">
+                    <li><span class="inline-code">KIPILOT_ENABLE_MUTATIONS</span>: when false, write tools only work in dry-run mode.</li>
+                    <li><span class="inline-code">KIPILOT_COMMIT_MESSAGE_PREFIX</span>: prefix for grouped write commits such as <span class="inline-code">KiPilot MCP: move_footprint</span>.</li>
+                    <li>Destructive tools and high-risk board-state changes still require <span class="inline-code">force=true</span> even when mutations are enabled.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Logging controls</h3>
+                  <ul class="docs-list">
+                    <li><span class="inline-code">KIPILOT_LOG_LEVEL</span>: one of <span class="inline-code">DEBUG</span>, <span class="inline-code">INFO</span>, <span class="inline-code">WARNING</span>, <span class="inline-code">ERROR</span>, or <span class="inline-code">CRITICAL</span>.</li>
+                    <li><span class="inline-code">KIPILOT_LOG_FILE</span>: optional path for persistent structured logs in addition to stderr.</li>
+                    <li>Never redirect logs to stdout, because stdout is the MCP wire.</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section class="docs-section reveal" id="clients">
+              <span class="eyebrow">MCP hosts</span>
+              <h2>Any stdio-capable MCP client can launch KiPilot with the same command model.</h2>
+              <p>
+                The exact configuration file format depends on the host, but the core command shape is identical:
+                run the Python interpreter inside the KiPilot environment and execute
+                <span class="inline-code">-m kipilot_mcp.server</span>.
+              </p>
+
+              <h3>GitHub Copilot in VS Code</h3>
+              <pre class="code-block"><code>{
+  "servers": {
+    "kipilot-mcp": {
+      "type": "stdio",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "kipilot_mcp.server"],
+      "env": {
+        "KIPILOT_KICAD_CLIENT_NAME": "kipilot-mcp",
+        "KIPILOT_KICAD_TIMEOUT_MS": "60000",
+        "KIPILOT_LOG_LEVEL": "INFO",
+        "KIPILOT_LOG_FILE": ".logs/kipilot-mcp.log"
+      }
+    }
+  }
+}</code></pre>
+
+              <h3>Generic stdio MCP host</h3>
+              <pre class="code-block"><code>{
+  "mcpServers": {
+    "kipilot-mcp": {
+      "command": "C:\\absolute\\path\\to\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "kipilot_mcp.server"],
+      "env": {
+        "KIPILOT_KICAD_CLIENT_NAME": "kipilot-mcp",
+        "KIPILOT_KICAD_TIMEOUT_MS": "60000",
+        "KIPILOT_LOG_LEVEL": "INFO",
+        "KIPILOT_LOG_FILE": ".logs/kipilot-mcp.log"
+      }
+    }
+  }
+}</code></pre>
+
+              <ul class="docs-list">
+                <li>Restart the host after changing server configuration.</li>
+                <li>Add <span class="inline-code">KICAD_API_SOCKET</span> and <span class="inline-code">KICAD_API_TOKEN</span> only when the default endpoint is not correct.</li>
+                <li>Use a workspace-relative log file only when the host launches the server from a predictable working directory.</li>
+              </ul>
+            </section>
+
+            <section class="docs-section reveal" id="conventions">
+              <span class="eyebrow">API conventions</span>
+              <h2>All tools return JSON objects with predictable success, error, identity, and unit conventions.</h2>
+              <p>
+                The server is optimized for MCP hosts and agent workflows, so responses deliberately echo target identifiers,
+                requested changes, and normalized geometry. That makes it easier for an agent to preview, explain, and then
+                safely apply the same change.
+              </p>
+
+              <h3>Success and failure shape</h3>
+              <pre class="code-block"><code># Success
+{
+  "ok": true,
+  "...": "tool-specific fields"
+}
+
+# Failure
+{
+  "ok": false,
+  "message": "Human-readable explanation",
+  "error": "Underlying error when available"
+}</code></pre>
+
+              <h3>Common serialization patterns</h3>
+              <pre class="code-block"><code># Position or point
+{
+  "x_nm": 1500000,
+  "y_nm": 2500000,
+  "x_mm": 1.5,
+  "y_mm": 2.5
+}
+
+# Layer
+{
+  "id": 0,
+  "name": "F.Cu"
+}
+
+# Net
+{
+  "name": "+3V3",
+  "code": 7
+}</code></pre>
+
+              <div class="docs-grid">
+                <div class="docs-note">
+                  <h3>Units and coordinates</h3>
+                  <ul class="docs-list">
+                    <li>Tool inputs use millimeters for geometry fields such as <span class="inline-code">x_mm</span>, <span class="inline-code">y_mm</span>, <span class="inline-code">width_mm</span>, and <span class="inline-code">diameter_mm</span>.</li>
+                    <li>Most outputs provide both millimeters and nanometers for deterministic round-tripping.</li>
+                    <li>Outline and polyline inputs are lists of point objects with <span class="inline-code">x_mm</span> and <span class="inline-code">y_mm</span>.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Identity and lookup rules</h3>
+                  <ul class="docs-list">
+                    <li>Use the returned item IDs from read tools for later mutation calls whenever possible.</li>
+                    <li>Footprint operations typically allow either <span class="inline-code">reference</span> or <span class="inline-code">footprint_id</span>.</li>
+                    <li>Track, zone, via, and generic item operations are ID-driven.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Dry runs and commit groups</h3>
+                  <ul class="docs-list">
+                    <li>Most write tools accept <span class="inline-code">dry_run</span> and return a preview of the post-change state without persisting it.</li>
+                    <li>When mutations are enabled, many write tools wrap operations in a KiCad commit group.</li>
+                    <li><span class="inline-code">save_board</span> persists the current board file and does not create a separate commit group.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Dangerous operations</h3>
+                  <ul class="docs-list">
+                    <li><span class="inline-code">kicad_revert_board</span>, <span class="inline-code">kicad_delete_items</span>, and live <span class="inline-code">kicad_set_enabled_layers</span> calls require <span class="inline-code">force=true</span>.</li>
+                    <li>These tools also report <span class="inline-code">dangerous: true</span> in their response payloads.</li>
+                    <li>Enabling mutations does not bypass the force guard.</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section class="docs-section reveal" id="tool-reference">
+              <span class="eyebrow">Tool reference</span>
+              <h2>The current MCP surface contains 41 tools across discovery, inspection, controlled mutation, editing, and persistence.</h2>
+              <p>
+                Every tool listed below is directly exposed through the MCP server. Grouping here is for documentation only;
+                the host sees each item as a flat callable tool.
+              </p>
+
+              <div class="docs-grid">
+                <div class="docs-note">
+                  <h3>Connection and discovery</h3>
+                  <p>3 tools for endpoint health, version reporting, and document visibility.</p>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Inspection and lookup</h3>
+                  <p>21 tools for board metadata, geometry, connectivity, search, board text lookup, and project metadata expansion.</p>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Controlled mutation</h3>
+                  <p>9 tools for visibility and layer state, origins, title block data, board text edits, footprints, and safe revert flows.</p>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Advanced editing and persistence</h3>
+                  <p>8 tools for tracks, vias, zones, whitelisted batch updates, deletion, refill, and save.</p>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Current release emphasis</h3>
+                  <p>The latest documentation pass adds full coverage for pads, generic graphics, project net classes, board netclass lookups, connectivity tracing, active-layer control, and guarded enabled-layer updates.</p>
+                </div>
+              </div>
+
+              <div class="docs-note">
+                <h3>Connection and document discovery</h3>
+
+                <p><strong><span class="inline-code">ping_kicad()</span></strong> is the primary health probe. It takes no arguments and verifies that the KiCad IPC endpoint is reachable.</p>
+                <ul class="docs-list">
+                  <li>Returns <span class="inline-code">socket_path</span>, <span class="inline-code">client_name</span>, <span class="inline-code">kicad_version</span>, <span class="inline-code">api_version</span>, and <span class="inline-code">api_version_matches_binding</span>.</li>
+                  <li>Typical success message: <span class="inline-code">KiCad IPC endpoint is reachable.</span></li>
+                  <li>Typical failure explains that KiCad is not reachable and includes the underlying error when available.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">get_kicad_version()</span></strong> uses the same underlying reachability and version probe, but is named for hosts and prompts that specifically ask for version data.</p>
+                <ul class="docs-list">
+                  <li>No arguments.</li>
+                  <li>Useful as the second validation check after <span class="inline-code">ping_kicad</span>.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_list_open_documents(document_types=None)</span></strong> returns the active board and project documents or filters by explicit KiCad document type IDs.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">document_types</span> is optional and accepts a list of integer type IDs.</li>
+                  <li>Returns <span class="inline-code">documents</span>, <span class="inline-code">count</span>, and a <span class="inline-code">source</span> indicator describing how the active document set was resolved.</li>
+                </ul>
+              </div>
+
+              <div class="docs-note">
+                <h3>Board context, stackup, and project metadata</h3>
+
+                <p><strong><span class="inline-code">kicad_get_board_summary()</span></strong> is the high-level board inventory tool.</p>
+                <ul class="docs-list">
+                  <li>No arguments.</li>
+                  <li>Returns serialized board metadata plus counts for footprints, nets, tracks, vias, zones, graphics, and text items.</li>
+                  <li>Also returns <span class="inline-code">copper_layer_count</span> and the active layer ID.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_board_outline()</span></strong> extracts Edge.Cuts-derived geometry for the current PCB.</p>
+                <ul class="docs-list">
+                  <li>No arguments.</li>
+                  <li>Use this to understand overall board extents and shape before placement or routing changes.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_stackup()</span></strong> returns stackup layers together with visible and enabled layer sets.</p>
+                <ul class="docs-list">
+                  <li>No arguments.</li>
+                  <li>Returns physical or logical stackup entries, including dielectric information when exposed by the binding.</li>
+                  <li>Also returns <span class="inline-code">visible_layers</span> and <span class="inline-code">enabled_layers</span> as serialized layer objects.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_project_text_variables()</span></strong> returns project-scoped text variables for the active board project.</p>
+                <ul class="docs-list">
+                  <li>No arguments.</li>
+                  <li>Returns a project descriptor plus both a map and an array representation of available text variables.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_expand_project_text_variables(text)</span></strong> expands project variables inside one text fragment.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">text</span> is required and is returned back as <span class="inline-code">input_text</span> beside the expanded result.</li>
+                  <li>Use this when an agent needs to preview the concrete value of title-block or project-driven strings before writing them elsewhere.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_project_net_classes()</span></strong> returns project net classes with serialized rule values.</p>
+                <ul class="docs-list">
+                  <li>No arguments.</li>
+                  <li>Returns the project descriptor, a <span class="inline-code">count</span>, and per-netclass rule fields such as clearance, track width, via diameter, and via drill in both nanometers and millimeters.</li>
+                </ul>
+              </div>
+
+              <div class="docs-note">
+                <h3>Search, inspection, and object lookup</h3>
+
+                <p><strong><span class="inline-code">kicad_get_footprints(limit=200)</span></strong> returns placed footprints with IDs, references, values, positions, orientations, layers, and lock state.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">limit</span> defaults to 200.</li>
+                  <li>Use returned footprint IDs in later mutation tools for exact targeting.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_find_footprints(reference=None, footprint_id=None, text_query=None, layer=None, area=None, limit=200)</span></strong> performs focused footprint lookup.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">reference</span> and <span class="inline-code">footprint_id</span> narrow by identity.</li>
+                  <li><span class="inline-code">text_query</span> searches text-bearing footprint fields exposed by the binding.</li>
+                  <li><span class="inline-code">layer</span> accepts a numeric ID or canonical name such as <span class="inline-code">F.Cu</span>.</li>
+                  <li><span class="inline-code">area</span> expects <span class="inline-code">x_min_mm</span>, <span class="inline-code">y_min_mm</span>, <span class="inline-code">x_max_mm</span>, and <span class="inline-code">y_max_mm</span>.</li>
+                  <li>Returns the normalized query block so clients can see how the request was resolved.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_nets(limit=200)</span></strong> returns serialized net names and codes.</p>
+                <ul class="docs-list">
+                  <li>Use net names from this tool as safe inputs for routing or track-editing tools.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_items_by_net(net_name, item_types=None, layer=None, area=None, limit=200)</span></strong> returns heterogeneous board items attached to a named net.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">net_name</span> is required.</li>
+                  <li><span class="inline-code">item_types</span> can narrow the KiCad item classes to include.</li>
+                  <li><span class="inline-code">layer</span> and <span class="inline-code">area</span> work as additional geometry filters.</li>
+                  <li>This is useful when an agent must find all board objects associated with a signal before editing.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_items_by_netclass(netclass_name, item_types=None, layer=None, area=None, limit=200)</span></strong> returns heterogeneous board items associated with a named net class.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">netclass_name</span> is required and is resolved against the active project.</li>
+                  <li>Use this when inspection should follow design-rule intent rather than a single explicit net.</li>
+                  <li><span class="inline-code">layer</span>, <span class="inline-code">area</span>, and optional KiCad <span class="inline-code">item_types</span> behave like the net-based lookup tool.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_netclass_for_nets(net_names)</span></strong> returns the effective net class for one or more named nets.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">net_names</span> is a required non-empty string array.</li>
+                  <li>Useful for validating whether a proposed routing change belongs to the expected design-rule bucket before editing geometry.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_connected_items(item_id, item_types=None, layer=None, area=None, limit=200)</span></strong> traces copper-connected items from a source item.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">item_id</span> is required and should come from an earlier read tool.</li>
+                  <li>The response includes the serialized <span class="inline-code">source_item</span> plus the connected item set, making it suitable for explainable agent workflows.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_tracks(limit=200)</span></strong>, <strong><span class="inline-code">kicad_get_vias(limit=200)</span></strong>, and <strong><span class="inline-code">kicad_get_zones(limit=200)</span></strong> return serialized geometry collections.</p>
+                <ul class="docs-list">
+                  <li>Tracks include start and end points, layer, net, lock state, width, length, and bounding box.</li>
+                  <li>Vias include position, net, diameter, drill diameter, lock state, and via type.</li>
+                  <li>Zones include net, layers, fill status, priority, type, bounding box, and outline geometry.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_pads(net_name=None, layer=None, area=None, limit=200)</span></strong> returns serialized pads with optional net, layer, and area filters.</p>
+                <ul class="docs-list">
+                  <li>Results include pad ID, number, position, pad type, net, and padstack-derived layer presence.</li>
+                  <li>This is the right starting point for pad-aware review flows before any future pad-geometry helpers are introduced.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_graphics(layer=None, area=None, limit=200)</span></strong> returns generic board graphics beyond the derived board outline.</p>
+                <ul class="docs-list">
+                  <li>Use it to inspect silkscreen, fabrication, or other board-shape graphics directly instead of only the Edge.Cuts outline.</li>
+                  <li>Each result includes its item ID, kind, layer, lock state, bounding box, and shape points exposed by the binding.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_board_text(text_id=None, text_query=None, layer=None, exact=False, limit=200)</span></strong> returns standalone board text and board text box items.</p>
+                <ul class="docs-list">
+                  <li>Use <span class="inline-code">text_query</span> for substring search or set <span class="inline-code">exact=true</span> for an exact text match.</li>
+                  <li><span class="inline-code">layer</span> accepts a numeric ID or canonical name such as <span class="inline-code">F.SilkS</span>.</li>
+                  <li>Results return the text item ID, current text content, layer, lock state, and position or text box corners.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_get_board_origins()</span></strong> and <strong><span class="inline-code">kicad_get_title_block()</span></strong> expose board metadata often needed in automation workflows.</p>
+                <ul class="docs-list">
+                  <li>The origin tool returns both <span class="inline-code">grid</span> and <span class="inline-code">drill</span> origins.</li>
+                  <li>The title block tool returns title, revision, date, company, and comment slots.</li>
+                </ul>
+              </div>
+
+              <div class="docs-note">
+                <h3>Visibility and board-state mutation</h3>
+
+                <p><strong><span class="inline-code">kicad_set_visible_layers(layers, dry_run=False, commit_message=None)</span></strong> updates the visible layer set.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">layers</span> is required and accepts layer names or numeric IDs.</li>
+                  <li>Returns previous visible layers, resolved target layers, and the resulting visible layer set.</li>
+                  <li>When mutations are enabled, the operation is committed under the configured commit prefix unless an explicit <span class="inline-code">commit_message</span> is provided.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_set_active_layer(layer, dry_run=False, commit_message=None)</span></strong> updates the current active layer in the board editor.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">layer</span> is required and accepts a numeric layer ID or canonical name such as <span class="inline-code">F.SilkS</span>.</li>
+                  <li>Returns both the previous and resulting active layer as serialized layer objects.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_set_enabled_layers(non_copper_layers, dry_run=False, commit_message=None, force=False)</span></strong> updates enabled non-copper layers while preserving the current copper layer count.</p>
+                <ul class="docs-list">
+                  <li>The tool intentionally does not expose arbitrary copper-layer-count edits.</li>
+                  <li>Dry-run mode previews the resulting enabled layer set without requiring live write access.</li>
+                  <li>Live mode requires <span class="inline-code">force=true</span> because disabling layers can delete content already placed on those layers.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_revert_board(dry_run=False, force=False)</span></strong> reverts unsaved board changes back to the last saved state.</p>
+                <ul class="docs-list">
+                  <li>This tool is destructive and requires <span class="inline-code">force=true</span>.</li>
+                  <li>It supports dry-run preview and marks the response with <span class="inline-code">dangerous: true</span>.</li>
+                  <li>Unlike grouped commit mutations, the live operation calls the board revert directly.</li>
+                  <li>The implementation includes targeted retry behavior for transient timeout or busy conditions.</li>
+                </ul>
+              </div>
+
+              <div class="docs-note">
+                <h3>Footprint placement and board metadata mutation</h3>
+
+                <p><strong><span class="inline-code">kicad_move_footprint(x_mm, y_mm, reference=None, footprint_id=None, dry_run=False, commit_message=None)</span></strong> moves a footprint to an absolute board coordinate.</p>
+                <ul class="docs-list">
+                  <li>Requires either <span class="inline-code">reference</span> or <span class="inline-code">footprint_id</span>.</li>
+                  <li>Returns the previous serialized footprint, the updated footprint preview or result, and the requested position.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_rotate_footprint(orientation_degrees, reference=None, footprint_id=None, dry_run=False, commit_message=None)</span></strong> sets footprint orientation in degrees.</p>
+                <ul class="docs-list">
+                  <li>Supports dry runs and the same targeting rules as <span class="inline-code">kicad_move_footprint</span>.</li>
+                  <li>Returns both previous and resulting footprint state.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_set_board_origin(origin_type, x_mm, y_mm, dry_run=False, commit_message=None)</span></strong> updates the grid or drill/place origin.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">origin_type</span> accepts <span class="inline-code">grid</span>, <span class="inline-code">drill</span>, <span class="inline-code">1</span>, or <span class="inline-code">2</span>.</li>
+                  <li>Returns previous and requested origin coordinates with a normalized origin type object.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_set_title_block(title=None, revision=None, date=None, company=None, comments=None, dry_run=False, commit_message=None)</span></strong> merges partial title block updates.</p>
+                <ul class="docs-list">
+                  <li>At least one field or comment change must be provided.</li>
+                  <li><span class="inline-code">comments</span> is a mapping keyed by title block comment slot numbers.</li>
+                  <li>Dry-run responses include both the previous title block and the merged post-change title block.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_update_board_text(text_id, new_text, expected_current_text=None, dry_run=False, commit_message=None)</span></strong> updates one standalone board text or board text box by item ID.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">text_id</span> and <span class="inline-code">new_text</span> are required.</li>
+                  <li>Use <span class="inline-code">expected_current_text</span> as a stale-data guard when the text must still match an exact known value before the write is applied.</li>
+                  <li>Dry-run responses include both the previous text item and the post-change preview so an agent can verify the exact silkscreen label before writing.</li>
+                </ul>
+              </div>
+
+              <div class="docs-note">
+                <h3>Creation and targeted geometry editing</h3>
+
+                <p><strong><span class="inline-code">kicad_create_track_segments(points, layer, width_mm, net_name=None, locked=False, dry_run=False, commit_message=None)</span></strong> creates straight track segments from a polyline.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">points</span> is an ordered list of board-space points in millimeters.</li>
+                  <li>The tool creates one segment between each consecutive point pair.</li>
+                  <li>Returns the resulting track list, layer, net, and count.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_create_via(x_mm, y_mm, diameter_mm, drill_diameter_mm, net_name=None, via_type=1, locked=False, dry_run=False, commit_message=None)</span></strong> creates a via at an absolute position.</p>
+                <ul class="docs-list">
+                  <li>The default <span class="inline-code">via_type</span> is <span class="inline-code">1</span>, which maps to <span class="inline-code">through</span>.</li>
+                  <li>Returns position, diameter, drill diameter, via type, net, and the serialized via result.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_update_track_geometry(track_id, start_x_mm=None, start_y_mm=None, end_x_mm=None, end_y_mm=None, width_mm=None, layer=None, net_name=None, locked=None, dry_run=False, commit_message=None)</span></strong> updates one straight track.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">track_id</span> is required.</li>
+                  <li>At least one geometry or metadata field must change.</li>
+                  <li>Supports endpoint edits, width changes, layer reassignment, net reassignment, and lock-state updates.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_update_zone_outline(zone_id, outline_points, dry_run=False, commit_message=None)</span></strong> replaces the outer polygon of a zone.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">zone_id</span> and <span class="inline-code">outline_points</span> are required.</li>
+                  <li>The outline must contain at least three points.</li>
+                  <li>The tool focuses on the primary zone outline rather than exposing a generic full-zone editor.</li>
+                </ul>
+              </div>
+
+              <div class="docs-note">
+                <h3>Whitelisted batch updates, deletion, refill, and save</h3>
+
+                <p><strong><span class="inline-code">kicad_update_items(updates, dry_run=False, commit_message=None)</span></strong> is the controlled batch updater.</p>
+                <ul class="docs-list">
+                  <li><span class="inline-code">updates</span> must be a non-empty array of objects.</li>
+                  <li>Each target item may only appear once per request.</li>
+                  <li>Only <span class="inline-code">footprint</span>, <span class="inline-code">track</span>, and <span class="inline-code">zone</span> kinds are allowed.</li>
+                  <li>Unsupported fields are rejected explicitly instead of being ignored silently.</li>
+                </ul>
+
+                <pre class="code-block"><code># Whitelisted update shapes
+{
+  "kind": "footprint",
+  "reference": "R1",
+  "footprint_id": "optional-id",
+  "x_mm": 10.0,
+  "y_mm": 12.0,
+  "orientation_degrees": 90.0
+}
+
+{
+  "kind": "track",
+  "track_id": "track-id",
+  "start_x_mm": 1.0,
+  "start_y_mm": 2.0,
+  "end_x_mm": 6.0,
+  "end_y_mm": 2.0,
+  "width_mm": 0.25,
+  "layer": "F.Cu",
+  "net_name": "+3V3",
+  "locked": false
+}
+
+{
+  "kind": "zone",
+  "zone_id": "zone-id",
+  "outline_points": [
+    {"x_mm": 0.0, "y_mm": 0.0},
+    {"x_mm": 10.0, "y_mm": 0.0},
+    {"x_mm": 10.0, "y_mm": 8.0},
+    {"x_mm": 0.0, "y_mm": 8.0}
+  ]
+}</code></pre>
+
+                <p><strong><span class="inline-code">kicad_delete_items(item_ids, dry_run=False, commit_message=None, force=False)</span></strong> removes board items by KiCad item ID.</p>
+                <ul class="docs-list">
+                  <li>Requires a non-empty list of item IDs.</li>
+                  <li>Requires <span class="inline-code">force=true</span> because it is destructive.</li>
+                  <li>Dry-run responses include the fully serialized target items.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_refill_zones(zone_ids=None, dry_run=False, commit_message=None)</span></strong> refills all zones or a selected subset.</p>
+                <ul class="docs-list">
+                  <li>When <span class="inline-code">zone_ids</span> is omitted, the server can refill all zones on the board.</li>
+                  <li>On large boards this can be slow, so the server includes targeted retry behavior for transient busy states.</li>
+                </ul>
+
+                <p><strong><span class="inline-code">kicad_save_board(dry_run=False)</span></strong> persists the currently open board file.</p>
+                <ul class="docs-list">
+                  <li>Dry-run mode reports the target filename without writing.</li>
+                  <li>Live mode calls the board save operation directly.</li>
+                </ul>
+              </div>
+            </section>
+
+            <section class="docs-section reveal" id="workflows">
+              <span class="eyebrow">Example workflows</span>
+              <h2>Use a read, preview, apply, then save flow for the safest agent-driven work.</h2>
+              <p>
+                KiPilot works best when an agent first discovers the exact target objects, previews the intended change,
+                and only then applies the mutation. The examples below show the expected rhythm.
+              </p>
+
+              <div class="docs-detail-grid">
+                <div class="docs-note">
+                  <h3>Recommended first prompts</h3>
+                  <ul class="docs-list">
+                    <li><span class="inline-code">Run ping_kicad and tell me if KiCad is reachable.</span></li>
+                    <li><span class="inline-code">Run get_kicad_version and show the KiCad and IPC API version.</span></li>
+                    <li><span class="inline-code">Summarize the current board, then list the first ten footprints and nets.</span></li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Safe edit pattern</h3>
+                  <ul class="docs-list">
+                    <li>Resolve the target with <span class="inline-code">kicad_find_footprints</span>, <span class="inline-code">kicad_get_board_text</span>, <span class="inline-code">kicad_get_pads</span>, <span class="inline-code">kicad_get_tracks</span>, or <span class="inline-code">kicad_get_zones</span>.</li>
+                    <li>Preview the change with the matching write tool and <span class="inline-code">dry_run=true</span>.</li>
+                    <li>Apply the same change with mutations enabled.</li>
+                    <li>Use <span class="inline-code">kicad_save_board</span> when you want the board file written to disk.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <h3>Example: move a footprint safely</h3>
+              <pre class="code-block"><code>1. kicad_find_footprints(reference="R1")
+2. kicad_move_footprint(reference="R1", x_mm=42.0, y_mm=18.5, dry_run=true)
+3. kicad_move_footprint(reference="R1", x_mm=42.0, y_mm=18.5, dry_run=false)
+4. kicad_save_board(dry_run=false)</code></pre>
+
+              <h3>Example: update a silkscreen board label safely</h3>
+              <pre class="code-block"><code>1. kicad_get_board_text(text_query="Mainboard v1.1", layer="F.SilkS", exact=true)
+2. kicad_update_board_text(
+     text_id="board-text-id",
+     new_text="Mainboard v1.2",
+     expected_current_text="Mainboard v1.1",
+     dry_run=true
+   )
+3. kicad_update_board_text(
+     text_id="board-text-id",
+     new_text="Mainboard v1.2",
+     expected_current_text="Mainboard v1.1",
+     dry_run=false
+   )
+4. kicad_save_board(dry_run=false)</code></pre>
+
+              <h3>Example: batch update with a whitelist</h3>
+              <pre class="code-block"><code>kicad_update_items(
+  updates=[
+    {
+      "kind": "footprint",
+      "footprint_id": "footprint-id",
+      "orientation_degrees": 45.0
+    },
+    {
+      "kind": "track",
+      "track_id": "track-id",
+      "width_mm": 0.3,
+      "locked": true
+    },
+    {
+      "kind": "zone",
+      "zone_id": "zone-id",
+      "outline_points": [
+        {"x_mm": 0.0, "y_mm": 0.0},
+        {"x_mm": 12.0, "y_mm": 0.0},
+        {"x_mm": 12.0, "y_mm": 6.0},
+        {"x_mm": 0.0, "y_mm": 6.0}
+      ]
+    }
+  ],
+  dry_run=true
+)</code></pre>
+
+              <h3>Example: trace a power network by design-rule class</h3>
+              <pre class="code-block"><code>1. kicad_get_project_net_classes()
+2. kicad_get_items_by_netclass("Power", layer="F.Cu")
+3. kicad_get_connected_items(item_id="track-id")
+4. kicad_get_netclass_for_nets(net_names=["+3V3", "GND"])</code></pre>
+
+              <h3>Example: preview a board-state change before a live layer update</h3>
+              <pre class="code-block"><code>1. kicad_get_stackup()
+2. kicad_set_active_layer(layer="F.SilkS", dry_run=true)
+3. kicad_set_enabled_layers(non_copper_layers=["F.SilkS", "Edge.Cuts"], dry_run=true)
+4. kicad_set_enabled_layers(non_copper_layers=["F.SilkS", "Edge.Cuts"], dry_run=false, force=true)</code></pre>
+            </section>
+
+            <section class="docs-section reveal" id="operations">
+              <span class="eyebrow">Operations</span>
+              <h2>Logging, retries, timeout sizing, and mutation guardrails are part of the runtime contract.</h2>
+              <p>
+                KiPilot is meant for real board sessions, so operational behavior matters as much as the raw tool catalog.
+                The current implementation includes deliberate choices around logs, retries, and write safety.
+              </p>
+
+              <div class="docs-grid">
+                <div class="docs-note">
+                  <h3>Logging</h3>
+                  <ul class="docs-list">
+                    <li>Logs go to <span class="inline-code">stderr</span> by default.</li>
+                    <li>Set <span class="inline-code">KIPILOT_LOG_FILE</span> to persist the same records to disk.</li>
+                    <li>Server startup, tool start, tool finish, duration, warnings, and exceptions are logged.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Timeouts</h3>
+                  <ul class="docs-list">
+                    <li>The default IPC timeout is 60000 ms.</li>
+                    <li>Large zone refills may still require more time on heavier boards.</li>
+                    <li>If you observe timeouts in practice, increase the timeout in the MCP host environment instead of repeatedly retrying manually.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Targeted retries</h3>
+                  <ul class="docs-list">
+                    <li><span class="inline-code">kicad_revert_board</span> retries transient timeout-like failures.</li>
+                    <li><span class="inline-code">kicad_refill_zones</span> retries selected busy or timeout conditions.</li>
+                    <li>The retry policy is intentionally narrow and not applied to arbitrary geometry creation or mutation calls.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Write safety</h3>
+                  <ul class="docs-list">
+                    <li>Mutations are disabled unless <span class="inline-code">KIPILOT_ENABLE_MUTATIONS=1</span>.</li>
+                    <li>Dry-run previews remain available when writes are disabled.</li>
+                    <li>Destructive and high-risk board-state tools still require <span class="inline-code">force=true</span> even after enabling mutations.</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section class="docs-section reveal" id="troubleshooting">
+              <span class="eyebrow">Troubleshooting</span>
+              <h2>Most failures come from endpoint selection, host config drift, or deliberate safety gates.</h2>
+              <p>
+                The fastest way to debug a problem is to verify the basic connection path first, then inspect the server log output,
+                then confirm that the board and tool inputs actually match the current KiCad session.
+              </p>
+
+              <div class="docs-grid">
+                <div class="docs-note">
+                  <h3><span class="inline-code">ping_kicad</span> fails</h3>
+                  <ul class="docs-list">
+                    <li>Make sure KiCad is already running.</li>
+                    <li>Verify that the API is enabled in KiCad when your installation requires it.</li>
+                    <li>If the host is not using the correct endpoint, pass <span class="inline-code">KICAD_API_SOCKET</span> and <span class="inline-code">KICAD_API_TOKEN</span> explicitly.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Health checks pass but board tools fail</h3>
+                  <ul class="docs-list">
+                    <li>Open the PCB Editor, not only the project window.</li>
+                    <li>Reconnect to the PCB Editor endpoint if the current endpoint only exposes project-level APIs.</li>
+                    <li>Use one KiCad instance while stabilizing the setup.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Mutation tools refuse to run</h3>
+                  <ul class="docs-list">
+                    <li>Set <span class="inline-code">KIPILOT_ENABLE_MUTATIONS=1</span> for live writes.</li>
+                    <li>Use <span class="inline-code">dry_run=true</span> if you only want a preview.</li>
+                    <li>For <span class="inline-code">kicad_revert_board</span>, <span class="inline-code">kicad_delete_items</span>, and live <span class="inline-code">kicad_set_enabled_layers</span> calls, also pass <span class="inline-code">force=true</span>.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Zone refill or revert times out</h3>
+                  <ul class="docs-list">
+                    <li>Increase <span class="inline-code">KIPILOT_KICAD_TIMEOUT_MS</span>.</li>
+                    <li>Check the log for tool duration and failure messages.</li>
+                    <li>Expect long refill operations on large copper pours.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3><span class="inline-code">kicad_update_items</span> rejects a payload</h3>
+                  <ul class="docs-list">
+                    <li>Confirm that the <span class="inline-code">kind</span> is one of <span class="inline-code">footprint</span>, <span class="inline-code">track</span>, or <span class="inline-code">zone</span>.</li>
+                    <li>Remove unsupported keys instead of assuming they will be ignored.</li>
+                    <li>Do not target the same item more than once in a single request.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>No useful logs available</h3>
+                  <ul class="docs-list">
+                    <li>Set <span class="inline-code">KIPILOT_LOG_LEVEL=INFO</span> or <span class="inline-code">DEBUG</span>.</li>
+                    <li>Set <span class="inline-code">KIPILOT_LOG_FILE</span> to a writable path.</li>
+                    <li>Remember that the server intentionally does not log to stdout.</li>
+                  </ul>
+                </div>
+
+                <div class="docs-note">
+                  <h3>Python or install problems on Windows</h3>
+                  <ul class="docs-list">
+                    <li>Use a stable Python release such as 3.13, 3.12, or 3.11.</li>
+                    <li>Avoid preview or alpha interpreters for this dependency stack.</li>
+                    <li>Recreate the virtual environment if the interpreter path changed underneath it.</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+
+      <footer class="site-footer">
+        <a class="footer-brand" href="index.html#top" aria-label="KiPilot home">
+          <img class="footer-brand__logo" src="KiPilot.svg" alt="KiPilot">
+        </a>
+
+        <div class="footer-links">
+          <a href="#overview">Overview</a>
+          <a href="#tool-reference">Tools</a>
+          <a href="changelog.html">Changelog</a>
+          <a href="index.html#download">Download</a>
+        </div>
+
+        <p class="footer-note">© <span id="current-year">2026</span> by Béla Szalontai</p>
+      </footer>
+    </div>
+  </body>
+</html>

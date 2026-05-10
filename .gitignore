@@ -12,9 +12,37 @@ dist/
 
 # Compiled Python bytecode
 *.py[cod]
+__pycache__/
+
+# Python virtual environments and packaging
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+site/
+
+# Python tooling caches and reports
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Local environment overrides
+.env
+.env.*
+!.env.example
 
 # Log files
 *.log
+.logs/
+
+# Local editor workspace files
+.vscode/
+!agent-test/.vscode/
+!agent-test/.vscode/mcp.json
 
 # Package files
 *.jar

@@ -1,0 +1,20 @@
+{
+  "servers": {
+    "kipilot-mcp": {
+      "type": "stdio",
+      "command": "${workspaceFolder}\\..\\.venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "kipilot_mcp.server"
+      ],
+      "env": {
+        "KIPILOT_KICAD_CLIENT_NAME": "kipilot-agent-test",
+        "KIPILOT_KICAD_TIMEOUT_MS": "60000",
+        "KIPILOT_ENABLE_MUTATIONS": "1",
+        "KIPILOT_COMMIT_MESSAGE_PREFIX": "KiPilot MCP",
+        "KIPILOT_LOG_LEVEL": "INFO",
+        "KIPILOT_LOG_FILE": ".logs/kipilot-agent-test.log"
+      }
+    }
+  }
+}

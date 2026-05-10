@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>KiPilot Changelog | Release notes and build history</title>
+    <meta
+      name="description"
+      content="KiPilot changelog with release notes, build history, and the roadmap story for the public KiCad MCP server."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    >
+    <link rel="stylesheet" href="styles.css">
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <div class="site-bg" aria-hidden="true">
+      <div class="site-bg__orb site-bg__orb--blue"></div>
+      <div class="site-bg__orb site-bg__orb--orange"></div>
+      <div class="site-bg__grid"></div>
+    </div>
+
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="index.html#top" aria-label="KiPilot home">
+          <img class="brand__logo" src="KiPilot.svg" alt="KiPilot">
+        </a>
+
+        <nav class="site-nav" aria-label="Primary">
+          <a href="docs.html">Docs</a>
+          <a class="is-active" href="changelog.html">Changelog</a>
+          <a href="index.html#github">GitHub</a>
+          <a href="index.html#download">Download</a>
+        </nav>
+      </header>
+
+      <main class="changelog-page page-tech">
+        <section class="section docs-hero">
+          <div class="docs-hero__copy reveal is-visible">
+            <h1>Changelog</h1>
+          </div>
+        </section>
+
+        <section class="section reveal">
+          <div class="changelog-list">
+            <article class="changelog-entry">
+              <div class="changelog-entry__header">
+                <div>
+                  <h2>Unreleased</h2>
+                  <p>Current work in progress.</p>
+                </div>
+                <span class="changelog-badge">Current</span>
+              </div>
+
+              <div class="changelog-group">
+                <h3>Changed</h3>
+                <ul class="docs-list">
+                  <li>The homepage hero was simplified and the GitHub block was reduced to the essential message.</li>
+                  <li>The docs page moved to a sidebar plus content layout for easier scanning.</li>
+                  <li>The changelog page now uses a plain release-log structure instead of decorative cards.</li>
+                </ul>
+              </div>
+            </article>
+
+            <article class="changelog-entry">
+              <div class="changelog-entry__header">
+                <div>
+                  <h2>Initial public site</h2>
+                  <p>Foundation for the public KiPilot presentation.</p>
+                </div>
+                <span class="changelog-badge">Base</span>
+              </div>
+
+              <div class="changelog-group">
+                <h3>Added</h3>
+                <ul class="docs-list">
+                  <li>Dedicated landing, docs, and changelog pages.</li>
+                  <li>Initial copy for install flow, MCP client integration, and KiCad connection checks.</li>
+                  <li>A public-facing structure for positioning KiPilot as an MCP bridge for live KiCad workflows.</li>
+                </ul>
+              </div>
+            </article>
+
+            <article class="changelog-entry">
+              <div class="changelog-entry__header">
+                <div>
+                  <h2>Next</h2>
+                  <p>Items to land when repository and release links are finalized.</p>
+                </div>
+                <span class="changelog-badge">Planned</span>
+              </div>
+
+              <div class="changelog-group">
+                <h3>Planned</h3>
+                <ul class="docs-list">
+                  <li>Replace placeholder download and repository destinations with real public links.</li>
+                  <li>Add versioned release notes once packaging and distribution are stable.</li>
+                  <li>Document verified tool coverage as the KiCad MCP surface expands.</li>
+                </ul>
+              </div>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <a class="footer-brand" href="index.html#top" aria-label="KiPilot home">
+          <img class="footer-brand__logo" src="KiPilot.svg" alt="KiPilot">
+        </a>
+
+        <div class="footer-links">
+          <a href="index.html#github">GitHub</a>
+          <a href="docs.html">Docs</a>
+          <a href="index.html#download">Download</a>
+        </div>
+
+        <p class="footer-note">© <span id="current-year">2026</span> by Béla Szalontai</p>
+      </footer>
+    </div>
+  </body>
+</html>

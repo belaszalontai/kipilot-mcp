@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>KiPilot | Free MCP bridge for live KiCad workflows</title>
+    <meta
+      name="description"
+      content="KiPilot is a free public GitHub MCP server that connects design agents to a live KiCad workflow through the official IPC path."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    >
+    <link rel="stylesheet" href="styles.css">
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <div class="site-bg" aria-hidden="true">
+      <div class="site-bg__orb site-bg__orb--blue"></div>
+      <div class="site-bg__orb site-bg__orb--orange"></div>
+      <div class="site-bg__grid"></div>
+    </div>
+
+    <div class="page-shell" id="top">
+      <header class="site-header">
+        <a class="brand" href="#top" aria-label="KiPilot home">
+          <img class="brand__logo" src="KiPilot.svg" alt="KiPilot">
+        </a>
+
+        <nav class="site-nav" aria-label="Primary">
+          <a href="docs.html">Docs</a>
+          <a href="changelog.html">Changelog</a>
+          <a href="#github">GitHub</a>
+          <a href="#download">Download</a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero section">
+          <div class="hero__copy reveal is-visible">
+            <div class="eyebrow-row">
+              <p class="eyebrow eyebrow--main">Public KiCad MCP server</p>
+            </div>
+
+            <h1>Connect your design agents to the KiCad session already on screen.</h1>
+
+            <p class="hero__lede">
+              KiPilot is a free public GitHub MCP server that lets GitHub Copilot,
+              Claude, and other MCP-aware agents work against a live KiCad workflow
+              through the official IPC path. An agent can design for you or help you
+              design while you watch every change happen in the KiCad UI.
+            </p>
+          </div>
+        </section>
+
+        <section class="section intro-section reveal">
+          <div class="section-heading section-heading--wide">
+            <p class="eyebrow eyebrow--main">Why KiPilot</p>
+            <h2>KiPilot matters when the job is bigger than a click.</h2>
+            <p>
+              If you already know the exact KiCad button to press, the native UI is
+              faster. KiPilot becomes valuable when you want an agent to inspect the
+              live board, reason across many objects, and carry out a controlled
+              sequence of PCB edits while you watch the result in KiCad.
+            </p>
+          </div>
+
+          <div class="editorial-grid">
+            <article class="editorial-card panel">
+              <span class="editorial-card__index">01</span>
+              <h3>Not worth an agent on its own</h3>
+              <p>
+                These are useful low-level actions, but weak standalone reasons to
+                involve an LLM.
+              </p>
+
+              <ul class="why-usecases">
+                <li>"Drop a via at this point."</li>
+                <li>"Rotate this one footprint by 90 degrees."</li>
+                <li>"Turn on the F.Cu layer."</li>
+                <li>"Move this single part by 1 mm."</li>
+              </ul>
+            </article>
+
+            <article class="editorial-card panel">
+              <span class="editorial-card__index">02</span>
+              <h3>Strong board-understanding requests</h3>
+              <p>
+                This is where natural language starts to save time: the agent can find,
+                filter, and explain the right PCB objects before you touch the layout.
+              </p>
+
+              <ul class="why-usecases">
+                <li>"List everything tied to the 3V3 net."</li>
+                <li>"Find every 0402 resistor on the top layer."</li>
+                <li>"Tell me which netclass this net belongs to."</li>
+                <li>"Inspect the USB diff-pair area, flag suspicious stubs, and select the affected items."</li>
+              </ul>
+            </article>
+
+            <article class="editorial-card panel">
+              <span class="editorial-card__index">03</span>
+              <h3>Strong board-changing requests</h3>
+              <p>
+                The agent earns its keep when one request expands into many precise PCB
+                actions with constraints, context, and reviewable output.
+              </p>
+
+              <ul class="why-usecases">
+                <li>"Pull the decoupling capacitors closer to U5 power pads without breaking clearance, and keep them on the top side."</li>
+                <li>"Find missing GND stitching along this board edge, propose vias, then place them every 5 mm."</li>
+                <li>"Re-group the connector area while keeping silkscreen readable."</li>
+                <li>"Move all 3V3 test points to the top layer and align them in one row."</li>
+                <li>"Shift this whole functional block and report which copper still needs manual rerouting."</li>
+                <li>"Update the board title block, assembly-relevant footprint attributes, and position-export fields together."</li>
+              </ul>
+            </article>
+          </div>
+
+          <div class="why-summary panel panel--blueprint">
+            <div class="why-summary__grid">
+              <div class="why-summary__copy">
+                <span class="why-summary__eyebrow">What KiPilot is actually for</span>
+                <h3>Intent in, board-aware workflow out.</h3>
+                <p>
+                  KiPilot becomes compelling when the request is not a single click,
+                  but a board-level task. The agent can inspect the live PCB, find the
+                  related objects, apply consistent changes across them, and keep the
+                  whole workflow reviewable in the KiCad UI.
+                </p>
+              </div>
+
+              <div class="why-summary__block">
+                <span>Where it becomes genuinely useful</span>
+                <ul class="why-usecases why-usecases--compact">
+                  <li>"Clean up this board region using these rules."</li>
+                  <li>"Make room for this module."</li>
+                  <li>"Reorganize this block using the layout pattern from the previous board."</li>
+                  <li>"Find the related objects and apply consistent changes across them."</li>
+                </ul>
+                <p>
+                  This is already too much repetitive work, context switching, and
+                  error-prone clicking to be pleasant by hand. That is where an agent
+                  starts saving real time.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section reveal" id="features">
+          <div class="feature-layout">
+            <div class="feature-copy">
+              <div class="section-heading section-heading--wide">
+                <p class="eyebrow eyebrow--main">Features</p>
+                <h2>PCB editing first, with schematic work kept as a version-gated next step.</h2>
+                <p>
+                  KiPilot is focused on the live KiCad board editor today. The current
+                  product story is PCB-aware editing and board-context assistance, while
+                  schematic editing stays explicitly tied to future KiCad 11-level support.
+                </p>
+              </div>
+
+              <ul class="github-list">
+                <li>Work against the PCB editor that is already open in KiCad</li>
+                <li>Inspect live board context before or during edits</li>
+                <li>Treat SCH editing as a future capability, not baseline availability today</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="section github-section reveal" id="github">
+          <div class="section-heading section-heading--wide">
+            <p class="eyebrow eyebrow--main">GitHub</p>
+            <h2>A public GitHub repository that shows exactly what Copilot can ask for.</h2>
+            <p>
+              This section should make the free and public nature obvious: the server is
+              inspectable, available to anyone, and built around a concrete MCP tool surface.
+            </p>
+          </div>
+
+          <div class="github-simple">
+            <p>
+              KiPilot is published as an open repository so teams can inspect the code,
+              run it locally, and understand the MCP surface before they connect an agent.
+            </p>
+
+            <ul class="github-list">
+              <li>Python MCP server for a live KiCad session</li>
+              <li>Setup notes for VS Code, Claude, and other stdio MCP clients</li>
+              <li>Tool names and behavior visible before adoption</li>
+            </ul>
+
+            <div class="github-cta">
+              <a class="button button--primary" href="https://github.com" target="_blank" rel="noreferrer">Open GitHub repository</a>
+            </div>
+          </div>
+        </section>
+
+        <section class="section download-section reveal" id="download">
+          <div class="section-heading section-heading--wide">
+            <p class="eyebrow eyebrow--main">Download</p>
+            <h2>Free download.</h2>
+            <p>
+              KiPilot is free for everyone. The user installs or clones the MCP server,
+              opens their own KiCad environment, and lets Copilot work against that live
+              context.
+            </p>
+          </div>
+
+          <div class="github-simple">
+            <p>
+              Use the same download entry point whether you want to inspect the code,
+              install the server locally, or wire it into your preferred MCP client.
+            </p>
+
+            <ul class="github-list">
+              <li>Free public MCP server for live KiCad workflows</li>
+              <li>Works with the same local KiCad session you already use</li>
+              <li>Later you can replace this placeholder with the final release URL</li>
+            </ul>
+
+            <div class="github-cta">
+              <a class="button button--primary" href="#">Free download placeholder</a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <a class="footer-brand" href="#top" aria-label="KiPilot home">
+          <img class="footer-brand__logo" src="KiPilot.svg" alt="KiPilot">
+        </a>
+
+        <div class="footer-links">
+          <a href="#github">GitHub</a>
+          <a href="#download">Download</a>
+        </div>
+
+        <p class="footer-note">© <span id="current-year">2026</span> by Béla Szalontai</p>
+      </footer>
+    </div>
+  </body>
+</html>
