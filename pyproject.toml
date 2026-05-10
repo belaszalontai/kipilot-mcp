@@ -29,9 +29,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/belaszalontai/kipilot"
+Homepage = "https://kipilot.org"
 Repository = "https://github.com/belaszalontai/kipilot"
-Documentation = "https://github.com/belaszalontai/kipilot/tree/main/web"
+Documentation = "https://kipilot.org/docs.html"
 Issues = "https://github.com/belaszalontai/kipilot/issues"
 
 [project.optional-dependencies]

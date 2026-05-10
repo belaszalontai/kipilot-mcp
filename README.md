@@ -8,6 +8,10 @@ KiPilot is a Python-based Model Context Protocol (MCP) server that connects MCP-
 
 The server runs over `stdio`, exposes board-aware MCP tools, and is designed for live KiCad PCB workflows where the user keeps full control of the GUI session.
 
+## Documentation
+
+Public project documentation is available at [kipilot.org/docs.html](https://kipilot.org/docs.html).
+
 ## Overview
 
 KiPilot exists to let an MCP client inspect and manipulate the PCB that is already open in KiCad.
@@ -213,6 +217,7 @@ python -m ruff check .
 ## The `web/` Folder
 
 The `web/` directory contains the static project website and public-facing documentation assets for KiPilot.
+The contents of this directory are the source for the deployed `https://kipilot.org` site.
 
 - `index.html`: landing page for the project
 - `docs.html`: detailed product and MCP tool documentation
@@ -222,6 +227,7 @@ The `web/` directory contains the static project website and public-facing docum
 - `KiPilot.svg`: shared logo and branding asset
 
 This folder is the repository's static presentation layer. It is separate from the Python MCP server so the product site, docs, and changelog can evolve independently from the runtime code.
+When the website content changes, treat updates in `web/` as updates to the public `kipilot.org` site as well.
 
 ## The `agent-test/` Folder
 
