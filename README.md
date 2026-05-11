@@ -1,5 +1,5 @@
 <p align="center">
-	<img src="web/KiPilot.svg" alt="KiPilot MCP">
+	<img src="KiPilot.svg" alt="KiPilot MCP">
 </p>
 
 # KiPilot MCP
@@ -202,32 +202,11 @@ python -m ruff check .
 |       `-- server.py
 |-- tests/
 |   `-- test_ipc_client.py
-|-- web/
-|   |-- KiPilot.svg
-|   |-- changelog.html
-|   |-- docs.html
-|   |-- index.html
-|   |-- script.js
-|   `-- styles.css
+|-- KiPilot.svg
 |-- pyproject.toml
 |-- README.md
 `-- start-kipilot-mcp.ps1
 ```
-
-## The `web/` Folder
-
-The `web/` directory contains the static project website and public-facing documentation assets for KiPilot.
-The contents of this directory are the source for the deployed `https://kipilot.org` site.
-
-- `index.html`: landing page for the project
-- `docs.html`: detailed product and MCP tool documentation
-- `changelog.html`: public release notes and roadmap-style changelog page
-- `styles.css`: shared styling for the site
-- `script.js`: lightweight client-side behavior such as reveal animations and dynamic year handling
-- `KiPilot.svg`: shared logo and branding asset
-
-This folder is the repository's static presentation layer. It is separate from the Python MCP server so the product site, docs, and changelog can evolve independently from the runtime code.
-When the website content changes, treat updates in `web/` as updates to the public `kipilot.org` site as well.
 
 ## The `agent-test/` Folder
 

@@ -43,6 +43,7 @@ htmlcov/
 .vscode/
 !agent-test/.vscode/
 !agent-test/.vscode/mcp.json
+/web/
 
 # Package files
 *.jar
