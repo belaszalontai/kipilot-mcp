@@ -51,14 +51,52 @@ Committed baseline:
 
 ## Requirements
 
-- Python 3.11+
-- Git
 - KiCad 10.x installed locally
 - A running KiCad GUI instance with IPC API support
+- Python 3.11+ for source installs and local ZIP builds
+- Git for source installs
 
 Use a stable CPython release such as 3.11, 3.12, or 3.13. Avoid preview or alpha Python interpreters because the native dependency chain may not publish wheels for them yet.
 
+The Windows ZIP release bundles its own Python runtime for the server process, so local Python is not required when you install from the downloadable Windows artifact.
+
 ## Quick Start
+
+Choose the installation path that fits your workflow:
+
+- Windows ZIP release if you want a ready-to-run Windows MCP server without managing Python locally
+- Source install if you want to inspect, modify, or develop the server from this repository
+
+### Windows ZIP release
+
+Download the latest Windows release ZIP from GitHub Releases, extract it, and point your MCP host at `kipilot-mcp.exe`.
+
+- Latest release: https://github.com/belaszalontai/kipilot-mcp/releases/latest
+- Artifact name pattern: `kipilot-mcp-<version>-windows-x64.zip`
+- The ZIP contains the stdio server executable plus its bundled runtime
+
+Example VS Code MCP configuration using the extracted Windows ZIP:
+
+```json
+{
+	"servers": {
+		"kipilot-mcp": {
+			"type": "stdio",
+			"command": "C:\\Tools\\kipilot-mcp-<version>-windows-x64\\kipilot-mcp.exe",
+			"env": {
+				"KIPILOT_KICAD_CLIENT_NAME": "kipilot-mcp",
+				"KIPILOT_KICAD_TIMEOUT_MS": "60000",
+				"KIPILOT_LOG_LEVEL": "INFO",
+				"KIPILOT_LOG_FILE": ".logs/kipilot-mcp.log"
+			}
+		}
+	}
+}
+```
+
+Do not double-click the executable for normal use. Let your MCP host start it so stdio stays attached to the host.
+
+### Source install
 
 Clone the public repository:
 
@@ -133,7 +171,7 @@ Operational notes:
 
 ## Running The Server
 
-After installation, run:
+After a source installation, run:
 
 ```powershell
 kipilot-mcp
@@ -145,7 +183,7 @@ or:
 python -m kipilot_mcp.server
 ```
 
-Example VS Code MCP configuration:
+Example VS Code MCP configuration for a source install:
 
 ```json
 {
@@ -167,7 +205,7 @@ Example VS Code MCP configuration:
 
 If your KiCad setup requires an explicit API socket or token, add `KICAD_API_SOCKET` and `KICAD_API_TOKEN` to the same `env` block.
 
-The bundled `start-kipilot-mcp.ps1` script is useful for first-run setup and manual terminal checks on Windows. MCP host configuration should normally use the direct Python command shown above so the host owns process startup and environment values.
+The bundled `start-kipilot-mcp.ps1` script is useful for first-run setup and manual terminal checks on Windows. If you use the downloadable Windows ZIP, point the MCP host at `kipilot-mcp.exe` instead of the Python command. For source installs, MCP host configuration should normally use the direct Python command shown above so the host owns process startup and environment values.
 
 ## Development
 
@@ -188,6 +226,16 @@ Run linting:
 ```powershell
 python -m ruff check .
 ```
+
+Build the Windows ZIP release locally:
+
+```powershell
+.\build-windows-zip.ps1 -ForceInstall -Clean
+```
+
+That script creates a versioned archive at `artifacts/kipilot-mcp-<version>-windows-x64.zip`, includes `README.md` and `LICENSE` inside the archive, and is the same build path used by the GitHub Actions release workflow.
+
+Release process checklist: see `RELEASE-CHECKLIST.md`.
 
 ## Repository Layout
 
@@ -210,7 +258,9 @@ python -m ruff check .
 |-- tests/
 |   `-- test_ipc_client.py
 |-- KiPilot.svg
+|-- build-windows-zip.ps1
 |-- pyproject.toml
+|-- pyinstaller_entry.py
 |-- README.md
 `-- start-kipilot-mcp.ps1
 ```

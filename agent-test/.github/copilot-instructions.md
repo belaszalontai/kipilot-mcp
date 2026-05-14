@@ -6,10 +6,15 @@ This workspace is a dedicated test harness for using the sibling `kipilot-mcp` s
 
 ## Workflow Expectations
 
-- Use the configured `kipilot-mcp` MCP server for KiCad tasks.
-- For KiCad board-state inspection and mutation tasks in this workspace, use only `kipilot-mcp` MCP tools as the source of truth.
+- Use the configured `kipilot-mcp` MCP server for every substantive KiCad answer in this workspace.
+- Treat this workspace as current-board-first: interpret user requests as referring to the live board unless the user explicitly asks to debug the MCP setup itself.
+- For KiCad inspection, explanation, and mutation tasks in this workspace, use only `kipilot-mcp` MCP tools as the source of truth.
 - Before any board-specific reasoning, verify that the `kipilot-mcp` MCP tools are actually available in the session. If the tool namespace is missing, treat that as an MCP server startup/configuration problem, not as a signal to search the repository for board state.
-- Verify connectivity with `ping_kicad` or `get_kicad_version` before board-specific actions when session state is unknown.
+- Verify connectivity with `ping_kicad` or `get_kicad_version` before substantive board actions when session state is unknown.
+- Establish the current board context with a minimal MCP read before giving higher-level advice when that context has not already been confirmed in the conversation.
+- If the prompt sounds generic, reference-oriented, or library-like, first inspect the current board for relevant live objects and answer from that board context instead of giving a standalone general answer.
+- If the current board does not provide relevant evidence for the generic request, say that plainly and do not replace the missing live context with repository mining or free-floating domain knowledge.
+- A response-language request changes only the language of the answer, not the MCP-first and current-board-first workflow.
 - Prefer board inspection first, then `dry_run=true`, then live mutations only if the user explicitly asks for a real write.
 - Prefer exact IDs returned by read tools for follow-up updates or deletions.
 - Prefer narrow MCP queries and smaller limits over broad fetches.
@@ -23,6 +28,7 @@ This workspace is a dedicated test harness for using the sibling `kipilot-mcp` s
 - Treat `kicad_find_footprints(text_query=...)` as a lookup over footprint `reference`, `value`, and `id`, not as proof that the matching visible object is standalone silkscreen content.
 - If the user explicitly says `footprint with value ...`, prioritize footprint lookup over standalone board text or graphics queries.
 - Do not send guessed raw numeric layer IDs in MCP calls unless those IDs were confirmed from the live board.
+- Do not generate generic electronics reference tables, package-size comparisons, or footprint matching advice without first anchoring them to the current live board through MCP.
 
 ## Scope Limits
 
