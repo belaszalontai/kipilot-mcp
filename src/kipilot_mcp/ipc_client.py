@@ -87,6 +87,7 @@ try:
     from kipy.board_types import Track as KiCadTrack  # type: ignore[import-not-found]
     from kipy.board_types import Via as KiCadVia  # type: ignore[import-not-found]
     from kipy.errors import ApiError  # type: ignore[import-not-found]
+    from kipy.errors import FutureVersionError  # type: ignore[import-not-found]
     from kipy.geometry import (
         PolygonWithHoles as KiCadPolygonWithHoles,
     )  # type: ignore[import-not-found]
@@ -105,6 +106,9 @@ except ModuleNotFoundError as exc:  # pragma: no cover - depends on local enviro
 
     class ApiError(RuntimeError):
         """Fallback API error used when kicad-python is unavailable."""
+
+    class FutureVersionError(RuntimeError):
+        """Fallback version error used when kicad-python is unavailable."""
 
     _KIPY_IMPORT_ERROR = exc
 else:
@@ -924,15 +928,25 @@ class KiCadIpcClient:
 
     def _check_connection(self, kicad: Any) -> dict[str, Any]:
         kicad.ping()
-        return {
+        result: dict[str, Any] = {
             "ok": True,
             "socket_path": self._config.socket_path,
             "client_name": self._config.client_name,
             "kicad_version": str(kicad.get_version()),
             "api_version": str(kicad.get_api_version()),
-            "api_version_matches_binding": bool(kicad.check_version()),
             "message": "KiCad IPC endpoint is reachable.",
         }
+
+        try:
+            result["api_version_matches_binding"] = bool(kicad.check_version())
+        except FutureVersionError as exc:
+            # KiCad is newer than the release kicad-python was built against.
+            # The IPC transport still works, so surface this as a warning
+            # instead of reporting the whole endpoint as unreachable.
+            result["api_version_matches_binding"] = False
+            result["version_warning"] = str(exc)
+
+        return result
 
     def _connection_kwargs(self) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
