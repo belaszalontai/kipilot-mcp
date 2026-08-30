@@ -63,6 +63,203 @@ def serialize_title_block(title_block: Any) -> dict[str, Any] | None:
     }
 
 
+def serialize_page_settings(page_settings: Any) -> dict[str, Any] | None:
+    if page_settings is None:
+        return None
+
+    return {
+        "page_size": getattr(page_settings, "page_size", None),
+        "orientation": getattr(page_settings, "orientation", None),
+        "drawing_sheet": getattr(page_settings, "drawing_sheet", ""),
+        "user_page_size": serialize_vector(getattr(page_settings, "user_page_size", None)),
+    }
+
+
+def serialize_schematic_plot_settings(plot_settings: Any) -> dict[str, Any] | None:
+    if plot_settings is None:
+        return None
+
+    return {
+        "drawing_sheet": getattr(plot_settings, "drawing_sheet", ""),
+        "default_font": getattr(plot_settings, "default_font", ""),
+        "variant": getattr(plot_settings, "variant", ""),
+        "plot_all": getattr(plot_settings, "plot_all", None),
+        "plot_drawing_sheet": getattr(plot_settings, "plot_drawing_sheet", None),
+        "plot_pages": list(getattr(plot_settings, "plot_pages", []) or []),
+        "show_hop_over": getattr(plot_settings, "show_hop_over", None),
+        "black_and_white": getattr(plot_settings, "black_and_white", None),
+        "page_size": getattr(plot_settings, "page_size", None),
+        "use_background_color": getattr(plot_settings, "use_background_color", None),
+        "min_pen_width": getattr(plot_settings, "min_pen_width", None),
+        "theme": getattr(plot_settings, "theme", ""),
+    }
+
+
+def serialize_board_plot_settings(plot_settings: Any) -> dict[str, Any] | None:
+    if plot_settings is None:
+        return None
+
+    return {
+        "layers": list(getattr(plot_settings, "layers", []) or []),
+        "common_layers": list(getattr(plot_settings, "common_layers", []) or []),
+        "color_theme": getattr(plot_settings, "color_theme", ""),
+        "drawing_sheet": getattr(plot_settings, "drawing_sheet", ""),
+        "variant": getattr(plot_settings, "variant", ""),
+        "mirror": getattr(plot_settings, "mirror", None),
+        "black_and_white": getattr(plot_settings, "black_and_white", None),
+        "negative": getattr(plot_settings, "negative", None),
+        "scale": getattr(plot_settings, "scale", None),
+        "sketch_pads_on_fab_layers": getattr(
+            plot_settings, "sketch_pads_on_fab_layers", None
+        ),
+        "hide_dnp_footprints_on_fab_layers": getattr(
+            plot_settings, "hide_dnp_footprints_on_fab_layers", None
+        ),
+        "sketch_dnp_footprints_on_fab_layers": getattr(
+            plot_settings, "sketch_dnp_footprints_on_fab_layers", None
+        ),
+        "crossout_dnp_footprints_on_fab_layers": getattr(
+            plot_settings, "crossout_dnp_footprints_on_fab_layers", None
+        ),
+        "plot_footprint_values": getattr(plot_settings, "plot_footprint_values", None),
+        "plot_reference_designators": getattr(
+            plot_settings, "plot_reference_designators", None
+        ),
+        "plot_drawing_sheet": getattr(plot_settings, "plot_drawing_sheet", None),
+        "subtract_solder_mask_from_silk": getattr(
+            plot_settings, "subtract_solder_mask_from_silk", None
+        ),
+        "plot_pad_numbers": getattr(plot_settings, "plot_pad_numbers", None),
+        "drill_marks": getattr(plot_settings, "drill_marks", None),
+        "use_drill_origin": getattr(plot_settings, "use_drill_origin", None),
+        "check_zones_before_plot": getattr(
+            plot_settings, "check_zones_before_plot", None
+        ),
+    }
+
+
+def serialize_schematic_item(item: Any) -> dict[str, Any] | None:
+    """Serialize one schematic item to a compact MCP-friendly representation."""
+    if item is None:
+        return None
+
+    return {
+        "id": serialize_identifier(getattr(item, "id", "")),
+        "type": getattr(item, "type", None),
+        "reference": getattr(item, "reference", None),
+        "value": getattr(item, "value", None),
+        "text": getattr(item, "text", None),
+        "position": serialize_vector(getattr(item, "position", None)),
+    }
+
+
+def serialize_schematic_bom_format_settings(format_settings: Any) -> dict[str, Any] | None:
+    if format_settings is None:
+        return None
+
+    return {
+        "preset_name": getattr(format_settings, "preset_name", ""),
+        "field_delimiter": getattr(format_settings, "field_delimiter", ""),
+        "string_delimiter": getattr(format_settings, "string_delimiter", ""),
+        "ref_delimiter": getattr(format_settings, "ref_delimiter", ""),
+        "ref_range_delimiter": getattr(format_settings, "ref_range_delimiter", ""),
+        "keep_tabs": getattr(format_settings, "keep_tabs", None),
+        "keep_line_breaks": getattr(format_settings, "keep_line_breaks", None),
+    }
+
+
+def serialize_schematic_bom_field(field: Any) -> dict[str, Any] | None:
+    if field is None:
+        return None
+
+    return {
+        "name": getattr(field, "name", ""),
+        "label": getattr(field, "label", ""),
+        "group_by": getattr(field, "group_by", None),
+    }
+
+
+def serialize_schematic_bom_field_settings(field_settings: Any) -> dict[str, Any] | None:
+    if field_settings is None:
+        return None
+
+    return {
+        "preset_name": getattr(field_settings, "preset_name", ""),
+        "fields": [
+            serialize_schematic_bom_field(field)
+            for field in getattr(field_settings, "fields", [])
+        ],
+        "sort_field": getattr(field_settings, "sort_field", ""),
+        "sort_direction": getattr(field_settings, "sort_direction", None),
+        "filter": getattr(field_settings, "filter", ""),
+    }
+
+
+def serialize_job_result(job_result: Any) -> dict[str, Any] | None:
+    if job_result is None:
+        return None
+
+    output_paths = getattr(job_result, "output_paths", None)
+    if output_paths is None:
+        raw_output_path = getattr(job_result, "output_path", None)
+        if raw_output_path is None:
+            output_paths = []
+        elif isinstance(raw_output_path, str):
+            output_paths = [raw_output_path]
+        else:
+            output_paths = list(raw_output_path)
+
+    return {
+        "succeeded": bool(getattr(job_result, "succeeded", False)),
+        "status": getattr(job_result, "status", None),
+        "output_paths": list(output_paths),
+        "message": getattr(job_result, "message", ""),
+    }
+
+
+def serialize_sheet_path(path: Any) -> dict[str, Any] | None:
+    if path is None:
+        return None
+
+    identifiers = [serialize_identifier(identifier) for identifier in getattr(path, "path", [])]
+    human_readable = getattr(path, "path_human_readable", "") or None
+
+    return {
+        "ids": identifiers,
+        "text": "/" + "/".join(identifiers),
+        "human_readable": human_readable,
+    }
+
+
+def serialize_sheet_instance(sheet: Any) -> dict[str, Any] | None:
+    if sheet is None:
+        return None
+
+    return {
+        "name": getattr(sheet, "name", ""),
+        "filename": getattr(sheet, "filename", ""),
+        "page_number": getattr(sheet, "page_number", ""),
+        "path": serialize_sheet_path(getattr(sheet, "path", None)),
+        "children": [serialize_sheet_instance(child) for child in getattr(sheet, "children", [])],
+    }
+
+
+def serialize_schematic_net(schematic_net: Any) -> dict[str, Any] | None:
+    if schematic_net is None:
+        return None
+
+    return {
+        "name": getattr(schematic_net, "name", ""),
+        "sheets": [
+            {
+                "path": serialize_sheet_path(getattr(sheet, "path", None)),
+                "item_ids": [serialize_identifier(item) for item in getattr(sheet, "items", [])],
+            }
+            for sheet in getattr(schematic_net, "sheets", [])
+        ],
+    }
+
+
 def serialize_text_variables(variables: Any) -> dict[str, Any]:
     items: list[tuple[str, str]] = []
 
@@ -93,6 +290,57 @@ def serialize_text_variables(variables: Any) -> dict[str, Any]:
             }
             for name, value in items
         ],
+    }
+
+
+def serialize_text_attributes(attributes: Any) -> dict[str, Any] | None:
+    if attributes is None:
+        return None
+
+    result = {
+        "font_name": getattr(attributes, "font_name", ""),
+        "angle_degrees": getattr(attributes, "angle", None),
+        "line_spacing": getattr(attributes, "line_spacing", None),
+        "italic": getattr(attributes, "italic", None),
+        "bold": getattr(attributes, "bold", None),
+        "underlined": getattr(attributes, "underlined", None),
+        "mirrored": getattr(attributes, "mirrored", None),
+        "multiline": getattr(attributes, "multiline", None),
+        "keep_upright": getattr(attributes, "keep_upright", None),
+        "size": serialize_vector(getattr(attributes, "size", None)),
+        "horizontal_alignment": getattr(attributes, "horizontal_alignment", None),
+        "vertical_alignment": getattr(attributes, "vertical_alignment", None),
+    }
+
+    stroke_width = getattr(attributes, "stroke_width", None)
+    if stroke_width is not None:
+        result["stroke_width_nm"] = stroke_width
+        result["stroke_width_mm"] = nanometers_to_millimeters(stroke_width)
+
+    return result
+
+
+def serialize_graphics_default(defaults: Any) -> dict[str, Any]:
+    line_thickness = getattr(defaults, "line_thickness", None)
+    result = {
+        "layer_class": getattr(defaults, "layer", None),
+        "text_attributes": serialize_text_attributes(getattr(defaults, "text", None)),
+    }
+    if line_thickness is not None:
+        result["line_thickness_nm"] = line_thickness
+        result["line_thickness_mm"] = nanometers_to_millimeters(line_thickness)
+    return result
+
+
+def serialize_editor_appearance_settings(settings: Any) -> dict[str, Any] | None:
+    if settings is None:
+        return None
+
+    return {
+        "inactive_layer_display": getattr(settings, "inactive_layer_display", None),
+        "net_color_display": getattr(settings, "net_color_display", None),
+        "board_flip": getattr(settings, "board_flip", None),
+        "ratsnest_display": getattr(settings, "ratsnest_display", None),
     }
 
 
@@ -399,6 +647,130 @@ def serialize_board_text(text_item: Any, board: Any | None = None) -> dict[str, 
     return result
 
 
+def serialize_barcode(barcode: Any, board: Any | None = None) -> dict[str, Any]:
+    result = {
+        "id": serialize_identifier(getattr(barcode, "id", "")),
+        "kind": type(barcode).__name__,
+        "text": getattr(barcode, "text", ""),
+        "layer": serialize_layer(getattr(barcode, "layer", None), board),
+        "locked": getattr(barcode, "locked", None),
+        "position": serialize_vector(getattr(barcode, "position", None)),
+        "orientation": serialize_angle(getattr(barcode, "orientation", None)),
+        "barcode_kind": getattr(barcode, "kind", None),
+        "error_correction": getattr(barcode, "error_correction", None),
+        "show_text": getattr(barcode, "show_text", None),
+        "knockout": getattr(barcode, "knockout", None),
+        "bounding_box": serialize_box(_maybe_call(barcode, "bounding_box")),
+    }
+
+    for field_name in ("width", "height", "text_height"):
+        value = getattr(barcode, field_name, None)
+        if value is None:
+            continue
+        result[f"{field_name}_nm"] = value
+        result[f"{field_name}_mm"] = nanometers_to_millimeters(value)
+
+    knockout_margin = serialize_vector(getattr(barcode, "knockout_margin", None))
+    if knockout_margin is not None:
+        result["knockout_margin"] = knockout_margin
+
+    return result
+
+
+def serialize_reference_image(reference_image: Any, board: Any | None = None) -> dict[str, Any]:
+    image_data = getattr(reference_image, "image_data", b"")
+
+    result = {
+        "id": serialize_identifier(getattr(reference_image, "id", "")),
+        "kind": type(reference_image).__name__,
+        "layer": serialize_layer(getattr(reference_image, "layer", None), board),
+        "locked": getattr(reference_image, "locked", None),
+        "position": serialize_vector(getattr(reference_image, "position", None)),
+        "transform_origin_offset": serialize_vector(
+            getattr(reference_image, "transform_origin_offset", None)
+        ),
+        "image_scale": getattr(reference_image, "image_scale", None),
+        "image_byte_count": len(image_data),
+        "bounding_box": serialize_box(_maybe_call(reference_image, "bounding_box")),
+    }
+
+    return result
+
+
+def serialize_dimension(dimension: Any, board: Any | None = None) -> dict[str, Any]:
+    result = {
+        "id": serialize_identifier(getattr(dimension, "id", "")),
+        "kind": type(dimension).__name__,
+        "layer": serialize_layer(getattr(dimension, "layer", None), board),
+        "locked": getattr(dimension, "locked", None),
+        "text": _serialize_text_value(getattr(dimension, "text", None)),
+        "override_text_enabled": getattr(dimension, "override_text_enabled", None),
+        "bounding_box": serialize_box(_maybe_call(dimension, "bounding_box")),
+    }
+
+    override_text = getattr(dimension, "override_text", None)
+    if override_text:
+        result["override_text"] = override_text
+
+    for field_name in ("prefix", "suffix"):
+        value = getattr(dimension, field_name, None)
+        if value:
+            result[field_name] = value
+
+    for field_name in (
+        "unit",
+        "unit_format",
+        "arrow_direction",
+        "precision",
+        "text_position",
+        "alignment",
+        "keep_text_aligned",
+        "suppress_trailing_zeroes",
+    ):
+        value = getattr(dimension, field_name, None)
+        if value is not None:
+            result[field_name] = value
+
+    for key in ("start", "end", "center", "radius_point"):
+        vector = serialize_vector(getattr(dimension, key, None))
+        if vector is not None:
+            result[key] = vector
+
+    for field_name in (
+        "height",
+        "extension_height",
+        "leader_length",
+        "line_thickness",
+        "arrow_length",
+        "extension_offset",
+    ):
+        value = getattr(dimension, field_name, None)
+        if value is None:
+            continue
+        result[f"{field_name}_nm"] = value
+        result[f"{field_name}_mm"] = nanometers_to_millimeters(value)
+
+    return result
+
+
+def serialize_group(group: Any, board: Any | None = None) -> dict[str, Any]:
+    _ = board
+    items = _as_sequence(getattr(group, "items", []))
+    item_ids = [
+        serialize_identifier(getattr(item, "id", item))
+        for item in items
+        if serialize_identifier(getattr(item, "id", item))
+    ]
+
+    return {
+        "id": serialize_identifier(getattr(group, "id", "")),
+        "kind": type(group).__name__,
+        "name": getattr(group, "name", ""),
+        "item_count": len(item_ids),
+        "item_ids": item_ids,
+    }
+
+
 def serialize_stackup(stackup: Any, board: Any | None = None) -> dict[str, Any]:
     layers = [
         serialize_stackup_layer(layer, board)
@@ -529,11 +901,23 @@ def serialize_item(item: Any, board: Any | None = None) -> dict[str, Any]:
         result["kind"] = type(item).__name__
         return result
 
+    if hasattr(item, "name") and hasattr(item, "items"):
+        return serialize_group(item, board)
+
     if hasattr(item, "number") and hasattr(item, "padstack"):
         return serialize_pad(item, board)
 
     if hasattr(item, "drill_diameter") and hasattr(item, "diameter"):
         return serialize_via(item, board)
+
+    if hasattr(item, "image_data") and hasattr(item, "image_scale"):
+        return serialize_reference_image(item, board)
+
+    if hasattr(item, "error_correction") and hasattr(item, "show_text"):
+        return serialize_barcode(item, board)
+
+    if hasattr(item, "override_text_enabled") and hasattr(item, "text"):
+        return serialize_dimension(item, board)
 
     if hasattr(item, "outline") and hasattr(item, "filled"):
         return serialize_zone(item, board)

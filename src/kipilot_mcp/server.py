@@ -117,16 +117,16 @@ async def _run_client_tool(
 
 @mcp.tool()
 async def ping_kicad() -> dict[str, Any]:
-    """Check whether a user-running KiCad 10 PCB IPC server is reachable."""
+    """Check whether a user-running KiCad IPC endpoint is reachable."""
 
     return await _run_client_tool("ping_kicad", "check_connection")
 
 
 @mcp.tool()
 async def get_kicad_version() -> dict[str, Any]:
-    """Return KiCad and IPC API version information from the running GUI instance."""
+    """Return KiCad and IPC API version information when the active endpoint exposes it."""
 
-    return await _run_client_tool("get_kicad_version", "check_connection")
+    return await _run_client_tool("get_kicad_version", "get_version_info")
 
 
 @mcp.tool()
@@ -148,6 +148,265 @@ async def kicad_list_open_documents(document_types: list[int] | None = None) -> 
 
 
 @mcp.tool()
+async def kicad_sch_get_hierarchy() -> dict[str, Any]:
+    """Return the top-level schematic hierarchy tree for the current schematic."""
+
+    return await _run_client_tool("kicad_sch_get_hierarchy", "get_schematic_hierarchy")
+
+
+@mcp.tool()
+async def kicad_sch_get_netlist(item_types: list[int] | None = None) -> dict[str, Any]:
+    """Return the current schematic netlist, optionally filtered by item types."""
+
+    return await _run_client_tool(
+        "kicad_sch_get_netlist",
+        "get_schematic_netlist",
+        item_types,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_hit_test(
+    item_id: str,
+    x_mm: float,
+    y_mm: float,
+    tolerance_mm: float = 0.0,
+) -> dict[str, Any]:
+    """Run a hit test against one schematic item at a schematic-space position."""
+
+    return await _run_client_tool(
+        "kicad_sch_hit_test",
+        "hit_test_schematic",
+        item_id=item_id,
+        x_mm=x_mm,
+        y_mm=y_mm,
+        tolerance_mm=tolerance_mm,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_get_page_settings() -> dict[str, Any]:
+    """Return the current schematic page settings."""
+
+    return await _run_client_tool(
+        "kicad_sch_get_page_settings",
+        "get_schematic_page_settings",
+    )
+
+
+@mcp.tool()
+async def kicad_sch_set_page_settings(
+    page_size: int | str | None = None,
+    orientation: int | str | None = None,
+    drawing_sheet: str | None = None,
+    user_page_size_mm: dict[str, float] | None = None,
+    dry_run: bool = False,
+    commit_message: str | None = None,
+) -> dict[str, Any]:
+    """Update one or more page settings fields on the current schematic."""
+
+    return await _run_client_tool(
+        "kicad_sch_set_page_settings",
+        "set_schematic_page_settings",
+        page_size=page_size,
+        orientation=orientation,
+        drawing_sheet=drawing_sheet,
+        user_page_size_mm=user_page_size_mm,
+        dry_run=dry_run,
+        commit_message=commit_message,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_get_title_block() -> dict[str, Any]:
+    """Return the current schematic title block information."""
+
+    return await _run_client_tool(
+        "kicad_sch_get_title_block",
+        "get_schematic_title_block",
+    )
+
+
+@mcp.tool()
+async def kicad_sch_set_title_block(
+    title: str | None = None,
+    revision: str | None = None,
+    date: str | None = None,
+    company: str | None = None,
+    comments: dict[str | int, str] | None = None,
+    dry_run: bool = False,
+    commit_message: str | None = None,
+) -> dict[str, Any]:
+    """Update one or more title block fields on the current schematic."""
+
+    return await _run_client_tool(
+        "kicad_sch_set_title_block",
+        "set_schematic_title_block",
+        title=title,
+        revision=revision,
+        date=date,
+        company=company,
+        comments=comments,
+        dry_run=dry_run,
+        commit_message=commit_message,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_export_svg(
+    output_dir: str,
+    plot_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export the current schematic to SVG files inside output_dir."""
+
+    return await _run_client_tool(
+        "kicad_sch_export_svg",
+        "export_schematic_svg",
+        output_dir=output_dir,
+        plot_settings=plot_settings,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_export_dxf(
+    output_dir: str,
+    plot_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export the current schematic to DXF files inside output_dir."""
+
+    return await _run_client_tool(
+        "kicad_sch_export_dxf",
+        "export_schematic_dxf",
+        output_dir=output_dir,
+        plot_settings=plot_settings,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_export_pdf(
+    output_file: str,
+    plot_settings: dict[str, Any] | None = None,
+    property_popups: bool = False,
+    hierarchical_links: bool = False,
+    include_metadata: bool = True,
+) -> dict[str, Any]:
+    """Export the current schematic to one PDF file using optional schematic plot settings."""
+
+    return await _run_client_tool(
+        "kicad_sch_export_pdf",
+        "export_schematic_pdf",
+        output_file=output_file,
+        plot_settings=plot_settings,
+        property_popups=property_popups,
+        hierarchical_links=hierarchical_links,
+        include_metadata=include_metadata,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_export_ps(
+    output_dir: str,
+    plot_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export the current schematic to PostScript files inside output_dir."""
+
+    return await _run_client_tool(
+        "kicad_sch_export_ps",
+        "export_schematic_ps",
+        output_dir=output_dir,
+        plot_settings=plot_settings,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_export_netlist(
+    output_file: str,
+    netlist_format: int | str = 2,
+    variant_name: str = "",
+) -> dict[str, Any]:
+    """Export the current schematic netlist to one output file."""
+
+    return await _run_client_tool(
+        "kicad_sch_export_netlist",
+        "export_schematic_netlist",
+        output_file=output_file,
+        netlist_format=netlist_format,
+        variant_name=variant_name,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_export_bom(
+    output_file: str,
+    format_settings: dict[str, Any] | None = None,
+    field_settings: dict[str, Any] | None = None,
+    exclude_dnp: bool = False,
+    group_symbols: bool = False,
+    variant_name: str = "",
+) -> dict[str, Any]:
+    """Export the current schematic BOM to one output file."""
+
+    return await _run_client_tool(
+        "kicad_sch_export_bom",
+        "export_schematic_bom",
+        output_file=output_file,
+        format_settings=format_settings,
+        field_settings=field_settings,
+        exclude_dnp=exclude_dnp,
+        group_symbols=group_symbols,
+        variant_name=variant_name,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_get_selection(limit: int = 200) -> dict[str, Any]:
+    """Return the current schematic selection."""
+
+    return await _run_client_tool("kicad_sch_get_selection", "get_schematic_selection", limit)
+
+
+@mcp.tool()
+async def kicad_sch_add_to_selection(
+    item_ids: list[str],
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Add one or more schematic items to the current selection by their IDs."""
+
+    return await _run_client_tool(
+        "kicad_sch_add_to_selection",
+        "add_to_schematic_selection",
+        item_ids=item_ids,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_remove_from_selection(
+    item_ids: list[str],
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Remove one or more schematic items from the current selection by their IDs."""
+
+    return await _run_client_tool(
+        "kicad_sch_remove_from_selection",
+        "remove_from_schematic_selection",
+        item_ids=item_ids,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_clear_selection(dry_run: bool = False) -> dict[str, Any]:
+    """Clear the current schematic selection."""
+
+    return await _run_client_tool(
+        "kicad_sch_clear_selection",
+        "clear_schematic_selection",
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
 async def kicad_get_board_outline() -> dict[str, Any]:
     """Return Edge.Cuts-derived board outline shapes for the current PCB."""
 
@@ -159,6 +418,41 @@ async def kicad_get_stackup() -> dict[str, Any]:
     """Return layer stackup information for the current PCB."""
 
     return await _run_client_tool("kicad_get_stackup", "get_stackup")
+
+
+@mcp.tool()
+async def kicad_get_board_layer_by_name(layer_name: str) -> dict[str, Any]:
+    """Resolve a board layer id by its canonical name."""
+
+    return await _run_client_tool(
+        "kicad_get_board_layer_by_name",
+        "get_board_layer_by_name",
+        layer_name,
+    )
+
+
+@mcp.tool()
+async def kicad_get_board_plot_settings() -> dict[str, Any]:
+    """Return the board plot settings stored in the current PCB."""
+
+    return await _run_client_tool("kicad_get_board_plot_settings", "get_board_plot_settings")
+
+
+@mcp.tool()
+async def kicad_set_board_plot_settings(
+    plot_settings: dict[str, Any],
+    dry_run: bool = False,
+    commit_message: str | None = None,
+) -> dict[str, Any]:
+    """Update the board plot settings stored in the current PCB."""
+
+    return await _run_client_tool(
+        "kicad_set_board_plot_settings",
+        "set_board_plot_settings",
+        plot_settings=plot_settings,
+        dry_run=dry_run,
+        commit_message=commit_message,
+    )
 
 
 @mcp.tool()
@@ -302,6 +596,38 @@ async def kicad_get_graphics(
 
 
 @mcp.tool()
+async def kicad_get_dimensions(limit: int = 200) -> dict[str, Any]:
+    """Return board dimensions from the current PCB."""
+
+    return await _run_client_tool("kicad_get_dimensions", "get_dimensions", limit)
+
+
+@mcp.tool()
+async def kicad_get_groups(limit: int = 200) -> dict[str, Any]:
+    """Return board groups from the current PCB."""
+
+    return await _run_client_tool("kicad_get_groups", "get_groups", limit)
+
+
+@mcp.tool()
+async def kicad_get_reference_images(limit: int = 200) -> dict[str, Any]:
+    """Return non-plotting reference images from the current PCB."""
+
+    return await _run_client_tool(
+        "kicad_get_reference_images",
+        "get_reference_images",
+        limit,
+    )
+
+
+@mcp.tool()
+async def kicad_get_barcodes(limit: int = 200) -> dict[str, Any]:
+    """Return barcode items from the current PCB."""
+
+    return await _run_client_tool("kicad_get_barcodes", "get_barcodes", limit)
+
+
+@mcp.tool()
 async def kicad_get_project_text_variables() -> dict[str, Any]:
     """Return text variables from the active project behind the current PCB."""
 
@@ -323,12 +649,153 @@ async def kicad_expand_project_text_variables(text: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+async def kicad_set_project_text_variables(
+    variables: dict[str, str],
+    merge_mode: str = "merge",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Update active project text variables, with merge or replace behavior."""
+
+    return await _run_client_tool(
+        "kicad_set_project_text_variables",
+        "set_project_text_variables",
+        variables=variables,
+        merge_mode=merge_mode,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
 async def kicad_get_project_net_classes() -> dict[str, Any]:
     """Return project net classes from the active board project."""
 
     return await _run_client_tool(
         "kicad_get_project_net_classes",
         "get_project_net_classes",
+    )
+
+
+@mcp.tool()
+async def kicad_get_selection(limit: int = 200) -> dict[str, Any]:
+    """Return the current board selection."""
+
+    return await _run_client_tool("kicad_get_selection", "get_selection", limit)
+
+
+@mcp.tool()
+async def kicad_get_graphics_defaults() -> dict[str, Any]:
+    """Return default graphics settings for board layer classes."""
+
+    return await _run_client_tool("kicad_get_graphics_defaults", "get_graphics_defaults")
+
+
+@mcp.tool()
+async def kicad_get_editor_appearance_settings() -> dict[str, Any]:
+    """Return current board editor appearance settings."""
+
+    return await _run_client_tool(
+        "kicad_get_editor_appearance_settings",
+        "get_editor_appearance_settings",
+    )
+
+
+@mcp.tool()
+async def kicad_get_items(
+    item_kinds: list[str] | None = None,
+    limit: int = 200,
+) -> dict[str, Any]:
+    """Return board items across one or more item kinds."""
+
+    return await _run_client_tool(
+        "kicad_get_items",
+        "get_items",
+        item_kinds=item_kinds,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def kicad_get_items_by_id(item_ids: list[str], limit: int = 200) -> dict[str, Any]:
+    """Return board items resolved by KiCad item IDs."""
+
+    return await _run_client_tool(
+        "kicad_get_items_by_id",
+        "get_items_by_id",
+        item_ids=item_ids,
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def kicad_hit_test(
+    item_id: str,
+    x_mm: float,
+    y_mm: float,
+    tolerance_mm: float = 0.0,
+) -> dict[str, Any]:
+    """Run a hit test against one board item at a board-space position."""
+
+    return await _run_client_tool(
+        "kicad_hit_test",
+        "hit_test",
+        item_id=item_id,
+        x_mm=x_mm,
+        y_mm=y_mm,
+        tolerance_mm=tolerance_mm,
+    )
+
+
+@mcp.tool()
+async def kicad_get_text_extents(text_item_id: str) -> dict[str, Any]:
+    """Return the text extents box for one board text or text box item."""
+
+    return await _run_client_tool(
+        "kicad_get_text_extents",
+        "get_text_extents",
+        text_item_id=text_item_id,
+    )
+
+
+@mcp.tool()
+async def kicad_get_text_as_shapes(text_item_ids: list[str]) -> dict[str, Any]:
+    """Return polygonal shapes representing one or more board text items."""
+
+    return await _run_client_tool(
+        "kicad_get_text_as_shapes",
+        "get_text_as_shapes",
+        text_item_ids=text_item_ids,
+    )
+
+
+@mcp.tool()
+async def kicad_check_padstack_presence_on_layers(
+    item_ids: list[str],
+    layers: list[int | str],
+) -> dict[str, Any]:
+    """Check whether padstack-bearing items have copper on the requested layers."""
+
+    return await _run_client_tool(
+        "kicad_check_padstack_presence_on_layers",
+        "check_padstack_presence_on_layers",
+        item_ids=item_ids,
+        layers=layers,
+    )
+
+
+@mcp.tool()
+async def kicad_get_pad_shapes_as_polygons(
+    pad_ids: list[str],
+    layer: int | str,
+    limit: int = 200,
+) -> dict[str, Any]:
+    """Return polygonized pad outlines for one or more pads on one board layer."""
+
+    return await _run_client_tool(
+        "kicad_get_pad_shapes_as_polygons",
+        "get_pad_shapes_as_polygons",
+        pad_ids=pad_ids,
+        layer=layer,
+        limit=limit,
     )
 
 
@@ -530,6 +997,25 @@ async def kicad_flip_footprint(
 
 
 @mcp.tool()
+async def kicad_flip_board_items(
+    item_ids: list[str],
+    direction: int | str = "left_right",
+    dry_run: bool = False,
+    commit_message: str | None = None,
+) -> dict[str, Any]:
+    """Flip one or more board items to the opposite side by their unique IDs."""
+
+    return await _run_client_tool(
+        "kicad_flip_board_items",
+        "flip_board_items_by_id",
+        item_ids=item_ids,
+        direction=direction,
+        dry_run=dry_run,
+        commit_message=commit_message,
+    )
+
+
+@mcp.tool()
 async def kicad_update_footprint_pad_net(
     net_name: str,
     reference: str | None = None,
@@ -574,6 +1060,68 @@ async def kicad_set_board_origin(
         y_mm=y_mm,
         dry_run=dry_run,
         commit_message=commit_message,
+    )
+
+
+@mcp.tool()
+async def kicad_add_to_selection(
+    item_ids: list[str],
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Add one or more items to the current board selection."""
+
+    return await _run_client_tool(
+        "kicad_add_to_selection",
+        "add_to_selection",
+        item_ids=item_ids,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_remove_from_selection(
+    item_ids: list[str],
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Remove one or more items from the current board selection."""
+
+    return await _run_client_tool(
+        "kicad_remove_from_selection",
+        "remove_from_selection",
+        item_ids=item_ids,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_clear_selection(dry_run: bool = False) -> dict[str, Any]:
+    """Clear the current board selection."""
+
+    return await _run_client_tool(
+        "kicad_clear_selection",
+        "clear_selection",
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_set_editor_appearance_settings(
+    inactive_layer_display: int | str | None = None,
+    net_color_display: int | str | None = None,
+    board_flip: int | str | None = None,
+    ratsnest_display: int | str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Update board editor appearance settings."""
+
+    return await _run_client_tool(
+        "kicad_set_editor_appearance_settings",
+        "set_editor_appearance_settings",
+        inactive_layer_display=inactive_layer_display,
+        net_color_display=net_color_display,
+        board_flip=board_flip,
+        ratsnest_display=ratsnest_display,
+        dry_run=dry_run,
     )
 
 
@@ -787,6 +1335,25 @@ async def kicad_save_board(dry_run: bool = False) -> dict[str, Any]:
     """Save the current board file to disk, with optional dry run."""
 
     return await _run_client_tool("kicad_save_board", "save_board", dry_run=dry_run)
+
+
+@mcp.tool()
+async def kicad_save_board_as(
+    filename: str,
+    overwrite: bool = False,
+    include_project: bool = True,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Save the current board to a new filename, with optional dry run."""
+
+    return await _run_client_tool(
+        "kicad_save_board_as",
+        "save_board_as",
+        filename=filename,
+        overwrite=overwrite,
+        include_project=include_project,
+        dry_run=dry_run,
+    )
 
 
 def main() -> None:

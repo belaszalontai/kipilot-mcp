@@ -71,6 +71,100 @@ async def test_check_connection_reports_clear_failure() -> None:
     assert result["error"] == "KiCad is not running"
 
 
+async def test_check_connection_accepts_schematic_endpoint_without_common_ping() -> None:
+    class LimitedSchematicEndpoint:
+        def __init__(self, **_kwargs: object) -> None:
+            self.schematic = FakeSchematic()
+
+        def ping(self) -> None:
+            raise ApiError(
+                "KiCad returned error: no handler available for request of type "
+                "kiapi.common.commands.Ping"
+            )
+
+        def get_open_documents(self, document_type: int) -> list[object]:
+            if document_type == 1:
+                return [self.schematic.document]
+
+            raise ApiError(
+                "KiCad returned error: no handler available for request of type "
+                "kiapi.common.commands.GetOpenDocuments"
+            )
+
+        def get_schematic(self) -> FakeSchematic:
+            return self.schematic
+
+        def get_api_version(self) -> str:
+            return "1.0.0"
+
+        def close(self) -> None:
+            pass
+
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=LimitedSchematicEndpoint)
+
+    result = await client.check_connection()
+
+    assert result == {
+        "ok": True,
+        "socket_path": None,
+        "client_name": "kipilot-mcp",
+        "endpoint_types": ["schematic"],
+        "api_version": "1.0.0",
+        "message": (
+            "KiCad IPC endpoint is reachable. The active schematic endpoint does not expose "
+            "common Ping/GetVersion requests."
+        ),
+    }
+
+
+async def test_get_version_info_reports_unavailable_runtime_version_on_schematic_endpoint() -> None:
+    class LimitedSchematicEndpoint:
+        def __init__(self, **_kwargs: object) -> None:
+            self.schematic = FakeSchematic()
+
+        def get_version(self) -> str:
+            raise ApiError(
+                "KiCad returned error: no handler available for request of type "
+                "kiapi.common.commands.GetVersion"
+            )
+
+        def get_open_documents(self, document_type: int) -> list[object]:
+            if document_type == 1:
+                return [self.schematic.document]
+
+            raise ApiError(
+                "KiCad returned error: no handler available for request of type "
+                "kiapi.common.commands.GetOpenDocuments"
+            )
+
+        def get_schematic(self) -> FakeSchematic:
+            return self.schematic
+
+        def get_api_version(self) -> str:
+            return "1.0.0"
+
+        def close(self) -> None:
+            pass
+
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=LimitedSchematicEndpoint)
+
+    result = await client.get_version_info()
+
+    assert result == {
+        "ok": True,
+        "socket_path": None,
+        "client_name": "kipilot-mcp",
+        "endpoint_types": ["schematic"],
+        "api_version": "1.0.0",
+        "kicad_version": None,
+        "api_version_matches_binding": None,
+        "message": (
+            "KiCad IPC endpoint is reachable. The active schematic endpoint does not expose "
+            "GetVersion(), so the runtime KiCad version could not be queried."
+        ),
+    }
+
+
 async def test_get_board_summary_returns_counts() -> None:
     client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeBoardKiCad)
 
@@ -195,6 +289,54 @@ async def test_list_open_documents_returns_active_board_and_project() -> None:
             },
         ],
         "source": "active_board",
+    }
+
+
+async def test_list_open_documents_falls_back_to_explicit_types_for_schematic_endpoint() -> None:
+    class SchematicDocumentsOnlyKiCad:
+        def __init__(self, **_kwargs: object) -> None:
+            self.schematic = FakeSchematic()
+
+        def get_board(self) -> object:
+            raise ApiError(
+                "KiCad returned error: no handler available for request of type "
+                "kiapi.common.commands.GetOpenDocuments"
+            )
+
+        def get_open_documents(self, document_type: int) -> list[object]:
+            if document_type == 1:
+                return [self.schematic.document]
+            if document_type == 6:
+                return []
+
+            raise ApiError(
+                "KiCad returned error: no handler available for request of type "
+                "kiapi.common.commands.GetOpenDocuments"
+            )
+
+        def close(self) -> None:
+            pass
+
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=SchematicDocumentsOnlyKiCad)
+
+    result = await client.list_open_documents()
+
+    assert result == {
+        "ok": True,
+        "count": 1,
+        "documents": [
+            {
+                "type": "2",
+                "board_filename": "",
+                "path": "C:/demo/demo.kicad_sch",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+            }
+        ],
+        "document_types": [1, 6],
+        "source": "explicit_types_fallback",
     }
 
 
@@ -631,6 +773,189 @@ async def test_get_graphics_supports_layer_and_area_filters() -> None:
     }
 
 
+async def test_get_dimensions_returns_serialized_items() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeBoardKiCad)
+
+    result = await client.get_dimensions()
+
+    assert result == {
+        "ok": True,
+        "count": 1,
+        "limit": 200,
+        "dimensions": [
+            {
+                "id": "dimension-id",
+                "kind": "FakeDimension",
+                "layer": {"id": 44, "name": "Edge.Cuts"},
+                "locked": False,
+                "text": "12.34 mm",
+                "override_text_enabled": False,
+                "bounding_box": {
+                    "top_left": {
+                        "x_nm": 1_000_000,
+                        "y_nm": 1_000_000,
+                        "x_mm": 1.0,
+                        "y_mm": 1.0,
+                    },
+                    "bottom_right": {
+                        "x_nm": 5_000_000,
+                        "y_nm": 3_000_000,
+                        "x_mm": 5.0,
+                        "y_mm": 3.0,
+                    },
+                },
+                "start": {
+                    "x_nm": 1_000_000,
+                    "y_nm": 1_000_000,
+                    "x_mm": 1.0,
+                    "y_mm": 1.0,
+                },
+                "end": {
+                    "x_nm": 5_000_000,
+                    "y_nm": 3_000_000,
+                    "x_mm": 5.0,
+                    "y_mm": 3.0,
+                },
+                "height_nm": 1_000_000,
+                "height_mm": 1.0,
+                "extension_height_nm": 500_000,
+                "extension_height_mm": 0.5,
+            }
+        ],
+    }
+
+
+async def test_get_groups_returns_serialized_items() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeBoardKiCad)
+
+    result = await client.get_groups()
+
+    assert result == {
+        "ok": True,
+        "count": 1,
+        "limit": 200,
+        "groups": [
+            {
+                "id": "group-id",
+                "kind": "FakeGroup",
+                "name": "Placement cluster",
+                "item_count": 2,
+                "item_ids": ["track-id", "shape-silk-1"],
+            }
+        ],
+    }
+
+
+async def test_get_reference_images_returns_serialized_items() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeBoardKiCad)
+
+    result = await client.get_reference_images()
+
+    assert result == {
+        "ok": True,
+        "count": 1,
+        "limit": 200,
+        "reference_images": [
+            {
+                "id": "reference-image-id",
+                "kind": "FakeReferenceImage",
+                "layer": {"id": 37, "name": "F.SilkS"},
+                "locked": False,
+                "position": {
+                    "x_nm": 15_000_000,
+                    "y_nm": 5_000_000,
+                    "x_mm": 15.0,
+                    "y_mm": 5.0,
+                },
+                "transform_origin_offset": {
+                    "x_nm": 500_000,
+                    "y_nm": 250_000,
+                    "x_mm": 0.5,
+                    "y_mm": 0.25,
+                },
+                "image_scale": 0.5,
+                "image_byte_count": 7,
+                "bounding_box": {
+                    "top_left": {
+                        "x_nm": 15_000_000,
+                        "y_nm": 5_000_000,
+                        "x_mm": 15.0,
+                        "y_mm": 5.0,
+                    },
+                    "bottom_right": {
+                        "x_nm": 17_000_000,
+                        "y_nm": 6_500_000,
+                        "x_mm": 17.0,
+                        "y_mm": 6.5,
+                    },
+                },
+            }
+        ],
+    }
+
+
+async def test_get_barcodes_returns_serialized_items() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeBoardKiCad)
+
+    result = await client.get_barcodes()
+
+    assert result == {
+        "ok": True,
+        "count": 1,
+        "limit": 200,
+        "barcodes": [
+            {
+                "id": "barcode-id",
+                "kind": "FakeBarcode",
+                "text": "SN0001",
+                "layer": {"id": 37, "name": "F.SilkS"},
+                "locked": False,
+                "position": {
+                    "x_nm": 25_000_000,
+                    "y_nm": 12_000_000,
+                    "x_mm": 25.0,
+                    "y_mm": 12.0,
+                },
+                "orientation": {
+                    "text": "90deg",
+                    "degrees": 90.0,
+                    "radians": None,
+                },
+                "barcode_kind": "qr",
+                "error_correction": "M",
+                "show_text": True,
+                "knockout": False,
+                "bounding_box": {
+                    "top_left": {
+                        "x_nm": 25_000_000,
+                        "y_nm": 12_000_000,
+                        "x_mm": 25.0,
+                        "y_mm": 12.0,
+                    },
+                    "bottom_right": {
+                        "x_nm": 31_000_000,
+                        "y_nm": 18_000_000,
+                        "x_mm": 31.0,
+                        "y_mm": 18.0,
+                    },
+                },
+                "width_nm": 6_000_000,
+                "width_mm": 6.0,
+                "height_nm": 6_000_000,
+                "height_mm": 6.0,
+                "text_height_nm": 1_200_000,
+                "text_height_mm": 1.2,
+                "knockout_margin": {
+                    "x_nm": 200_000,
+                    "y_nm": 200_000,
+                    "x_mm": 0.2,
+                    "y_mm": 0.2,
+                },
+            }
+        ],
+    }
+
+
 async def test_get_project_text_variables_returns_project_scope_data() -> None:
     client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeBoardKiCad)
 
@@ -690,6 +1015,104 @@ async def test_expand_project_text_variables_returns_expanded_text() -> None:
     }
 
 
+async def test_set_project_text_variables_dry_run_previews_merged_values() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=False), kicad_factory=FakeMutationKiCad)
+
+    result = await client.set_project_text_variables(
+        {
+            "BOARD_REV": "B",
+            "BUILD_VARIANT": "PROTO",
+        },
+        dry_run=True,
+    )
+
+    assert result == {
+        "ok": True,
+        "mutation": "set_project_text_variables",
+        "dry_run": True,
+        "commit_message": None,
+        "project": {
+            "name": "demo",
+            "path": "C:/demo/demo.kicad_pro",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "path": "C:/demo/demo.kicad_pro",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+            },
+        },
+        "merge_mode": "merge",
+        "previous_text_variables": {
+            "count": 2,
+            "values": {
+                "AUTHOR": "KiPilot",
+                "BOARD_REV": "A",
+            },
+            "variables": [
+                {"name": "AUTHOR", "value": "KiPilot"},
+                {"name": "BOARD_REV", "value": "A"},
+            ],
+        },
+        "requested_text_variables": {
+            "count": 2,
+            "values": {
+                "BOARD_REV": "B",
+                "BUILD_VARIANT": "PROTO",
+            },
+            "variables": [
+                {"name": "BOARD_REV", "value": "B"},
+                {"name": "BUILD_VARIANT", "value": "PROTO"},
+            ],
+        },
+        "text_variables": {
+            "count": 3,
+            "values": {
+                "AUTHOR": "KiPilot",
+                "BOARD_REV": "B",
+                "BUILD_VARIANT": "PROTO",
+            },
+            "variables": [
+                {"name": "AUTHOR", "value": "KiPilot"},
+                {"name": "BOARD_REV", "value": "B"},
+                {"name": "BUILD_VARIANT", "value": "PROTO"},
+            ],
+        },
+    }
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.board.get_project().calls == []
+
+
+async def test_set_project_text_variables_updates_project_when_enabled() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=True), kicad_factory=FakeMutationKiCad)
+
+    result = await client.set_project_text_variables(
+        {
+            "AUTHOR": "KiPilot Labs",
+        },
+        merge_mode="replace",
+    )
+
+    assert result["ok"] is True
+    assert result["mutation"] == "set_project_text_variables"
+    assert result["merge_mode"] == "replace"
+    assert result["text_variables"] == {
+        "count": 1,
+        "values": {
+            "AUTHOR": "KiPilot Labs",
+        },
+        "variables": [
+            {"name": "AUTHOR", "value": "KiPilot Labs"},
+        ],
+    }
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.board.get_project().calls == [
+        ("set_text_variables", {"AUTHOR": "KiPilot Labs"}, 2),
+    ]
+
+
 async def test_get_project_net_classes_returns_serialized_rules() -> None:
     client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeBoardKiCad)
 
@@ -736,6 +1159,525 @@ async def test_get_project_net_classes_returns_serialized_rules() -> None:
                 "via_drill_nm": 400_000,
                 "via_drill_mm": 0.4,
             },
+        ],
+    }
+
+
+async def test_get_selection_returns_serialized_items() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeMutationKiCad)
+
+    result = await client.get_selection()
+
+    assert result == {
+        "ok": True,
+        "count": 1,
+        "limit": 200,
+        "selection": [
+            {
+                "id": "track-id",
+                "kind": "FakeMutableTrack",
+                "layer": {"id": 0, "name": "F.Cu"},
+                "locked": False,
+                "net": {"name": "+3V3", "code": 7},
+                "start": {
+                    "x_nm": 1_000_000,
+                    "y_nm": 2_000_000,
+                    "x_mm": 1.0,
+                    "y_mm": 2.0,
+                },
+                "end": {
+                    "x_nm": 6_000_000,
+                    "y_nm": 2_000_000,
+                    "x_mm": 6.0,
+                    "y_mm": 2.0,
+                },
+                "width_nm": 250_000,
+                "width_mm": 0.25,
+                "length_nm": 5_000_000.0,
+                "length_mm": 5.0,
+                "bounding_box": {
+                    "top_left": {
+                        "x_nm": 1_000_000,
+                        "y_nm": 2_000_000,
+                        "x_mm": 1.0,
+                        "y_mm": 2.0,
+                    },
+                    "bottom_right": {
+                        "x_nm": 6_000_000,
+                        "y_nm": 2_000_000,
+                        "x_mm": 6.0,
+                        "y_mm": 2.0,
+                    },
+                },
+            }
+        ],
+    }
+
+
+async def test_add_to_selection_dry_run_previews_result() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=False), kicad_factory=FakeMutationKiCad)
+
+    result = await client.add_to_selection(item_ids=["footprint-id"], dry_run=True)
+
+    assert result["ok"] is True
+    assert result["mutation"] == "add_to_selection"
+    assert result["dry_run"] is True
+    assert result["requested_item_ids"] == ["footprint-id"]
+    assert result["previous_count"] == 1
+    assert result["count"] == 2
+    assert [item["id"] for item in result["selection"]] == ["track-id", "footprint-id"]
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.board.calls == []
+
+
+async def test_remove_from_selection_updates_selection_when_enabled() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=True), kicad_factory=FakeMutationKiCad)
+
+    result = await client.remove_from_selection(item_ids=["track-id"])
+
+    assert result["ok"] is True
+    assert result["mutation"] == "remove_from_selection"
+    assert result["previous_count"] == 1
+    assert result["count"] == 0
+    assert result["selection"] == []
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.board.calls == [
+        ("remove_from_selection", ["track-id"]),
+    ]
+
+
+async def test_clear_selection_clears_items_when_enabled() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=True), kicad_factory=FakeMutationKiCad)
+
+    result = await client.clear_selection()
+
+    assert result["ok"] is True
+    assert result["mutation"] == "clear_selection"
+    assert result["previous_count"] == 1
+    assert result["count"] == 0
+    assert result["selection"] == []
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.board.calls == [("clear_selection",)]
+
+
+async def test_get_graphics_defaults_returns_serialized_defaults() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeMutationKiCad)
+
+    result = await client.get_graphics_defaults()
+
+    assert result == {
+        "ok": True,
+        "count": 2,
+        "graphics_defaults": [
+            {
+                "layer_class": 1,
+                "line_thickness_nm": 150_000,
+                "line_thickness_mm": 0.15,
+                "text_attributes": {
+                    "font_name": "KiCad Font",
+                    "angle_degrees": 0.0,
+                    "line_spacing": 1.0,
+                    "italic": False,
+                    "bold": False,
+                    "underlined": False,
+                    "mirrored": False,
+                    "multiline": False,
+                    "keep_upright": True,
+                    "size": {
+                        "x_nm": 1_000_000,
+                        "y_nm": 1_200_000,
+                        "x_mm": 1.0,
+                        "y_mm": 1.2,
+                    },
+                    "horizontal_alignment": 1,
+                    "vertical_alignment": 2,
+                    "stroke_width_nm": 120_000,
+                    "stroke_width_mm": 0.12,
+                },
+            },
+            {
+                "layer_class": 2,
+                "line_thickness_nm": 200_000,
+                "line_thickness_mm": 0.2,
+                "text_attributes": {
+                    "font_name": "KiCad Sans",
+                    "angle_degrees": 90.0,
+                    "line_spacing": 1.1,
+                    "italic": True,
+                    "bold": True,
+                    "underlined": False,
+                    "mirrored": False,
+                    "multiline": True,
+                    "keep_upright": False,
+                    "size": {
+                        "x_nm": 1_500_000,
+                        "y_nm": 1_500_000,
+                        "x_mm": 1.5,
+                        "y_mm": 1.5,
+                    },
+                    "horizontal_alignment": 2,
+                    "vertical_alignment": 3,
+                    "stroke_width_nm": 180_000,
+                    "stroke_width_mm": 0.18,
+                },
+            },
+        ],
+    }
+
+
+async def test_get_editor_appearance_settings_returns_current_values() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeMutationKiCad)
+
+    result = await client.get_editor_appearance_settings()
+
+    assert result == {
+        "ok": True,
+        "appearance_settings": {
+            "inactive_layer_display": 1,
+            "net_color_display": 2,
+            "board_flip": 1,
+            "ratsnest_display": 3,
+        },
+    }
+
+
+async def test_set_editor_appearance_settings_dry_run_previews_changes() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=False), kicad_factory=FakeMutationKiCad)
+
+    result = await client.set_editor_appearance_settings(
+        board_flip=2,
+        ratsnest_display=1,
+        dry_run=True,
+    )
+
+    assert result == {
+        "ok": True,
+        "mutation": "set_editor_appearance_settings",
+        "dry_run": True,
+        "commit_message": None,
+        "board": {
+            "name": "demo.kicad_pcb",
+            "document": {
+                "type": "1",
+                "board_filename": "demo.kicad_pcb",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+            },
+        },
+        "previous_appearance_settings": {
+            "inactive_layer_display": 1,
+            "net_color_display": 2,
+            "board_flip": 1,
+            "ratsnest_display": 3,
+        },
+        "appearance_settings": {
+            "inactive_layer_display": 1,
+            "net_color_display": 2,
+            "board_flip": 2,
+            "ratsnest_display": 1,
+        },
+        "requested_changes": {
+            "board_flip": 2,
+            "ratsnest_display": 1,
+        },
+    }
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.board.calls == []
+
+
+async def test_set_editor_appearance_settings_updates_when_enabled() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=True), kicad_factory=FakeMutationKiCad)
+
+    result = await client.set_editor_appearance_settings(
+        inactive_layer_display=4,
+        net_color_display=5,
+    )
+
+    assert result["ok"] is True
+    assert result["mutation"] == "set_editor_appearance_settings"
+    assert result["appearance_settings"] == {
+        "inactive_layer_display": 4,
+        "net_color_display": 5,
+        "board_flip": 1,
+        "ratsnest_display": 3,
+    }
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.board.calls == [
+        ("set_editor_appearance_settings", 4, 5, 1, 3),
+    ]
+
+
+async def test_get_items_filters_by_requested_kinds() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeMutationKiCad)
+
+    result = await client.get_items(item_kinds=["footprints", "tracks"])
+
+    assert result["ok"] is True
+    assert result["count"] == 3
+    assert result["item_kinds"] == ["footprints", "tracks"]
+    assert [item["id"] for item in result["items"]] == [
+        "footprint-id",
+        "footprint-b-id",
+        "track-id",
+    ]
+
+
+async def test_get_items_by_id_returns_requested_order() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeMutationKiCad)
+
+    result = await client.get_items_by_id(["via-id", "footprint-id"])
+
+    assert result["ok"] is True
+    assert result["count"] == 2
+    assert result["item_ids"] == ["via-id", "footprint-id"]
+    assert [item["id"] for item in result["items"]] == ["via-id", "footprint-id"]
+
+
+async def test_hit_test_returns_true_for_point_inside_track_bounds() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeMutationKiCad)
+
+    result = await client.hit_test(item_id="track-id", x_mm=3.0, y_mm=2.0)
+
+    assert result == {
+        "ok": True,
+        "item": {
+            "id": "track-id",
+            "kind": "FakeMutableTrack",
+            "start": {
+                "x_nm": 1_000_000,
+                "y_nm": 2_000_000,
+                "x_mm": 1.0,
+                "y_mm": 2.0,
+            },
+            "end": {
+                "x_nm": 6_000_000,
+                "y_nm": 2_000_000,
+                "x_mm": 6.0,
+                "y_mm": 2.0,
+            },
+            "layer": {"id": 0, "name": "F.Cu"},
+            "net": {"name": "+3V3", "code": 7},
+            "locked": False,
+            "width_nm": 250_000,
+            "width_mm": 0.25,
+            "length_nm": 5_000_000.0,
+            "length_mm": 5.0,
+            "bounding_box": {
+                "top_left": {
+                    "x_nm": 1_000_000,
+                    "y_nm": 2_000_000,
+                    "x_mm": 1.0,
+                    "y_mm": 2.0,
+                },
+                "bottom_right": {
+                    "x_nm": 6_000_000,
+                    "y_nm": 2_000_000,
+                    "x_mm": 6.0,
+                    "y_mm": 2.0,
+                },
+            },
+        },
+        "position": {
+            "x_nm": 3_000_000,
+            "y_nm": 2_000_000,
+            "x_mm": 3.0,
+            "y_mm": 2.0,
+        },
+        "tolerance_nm": 0,
+        "tolerance_mm": 0.0,
+        "hit": True,
+    }
+
+
+async def test_get_text_extents_returns_bounding_box_for_board_text() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeMutationKiCad)
+
+    result = await client.get_text_extents(text_item_id="board-text-id")
+
+    assert result["ok"] is True
+    assert result["item"]["id"] == "board-text-id"
+    assert result["bounding_box"] == {
+        "top_left": {
+            "x_nm": 20_000_000,
+            "y_nm": 10_000_000,
+            "x_mm": 20.0,
+            "y_mm": 10.0,
+        },
+        "bottom_right": {
+            "x_nm": 27_000_000,
+            "y_nm": 11_000_000,
+            "x_mm": 27.0,
+            "y_mm": 11.0,
+        },
+    }
+
+
+async def test_get_text_as_shapes_returns_compound_shapes_for_text_items() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeMutationKiCad)
+
+    result = await client.get_text_as_shapes(text_item_ids=["board-text-id", "board-textbox-id"])
+
+    assert result["ok"] is True
+    assert result["count"] == 2
+    assert result["item_ids"] == ["board-text-id", "board-textbox-id"]
+    assert result["items"][0]["item"]["id"] == "board-text-id"
+    assert result["items"][0]["shape_count"] == 1
+    assert result["items"][0]["shapes"][0]["id"] == "board-text-id-shape"
+    assert result["items"][1]["item"]["id"] == "board-textbox-id"
+    assert result["items"][1]["shape_count"] == 1
+    assert result["items"][1]["shapes"][0]["id"] == "board-textbox-id-shape"
+
+
+async def test_save_board_as_dry_run_previews_target_file() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=False), kicad_factory=FakeMutationKiCad)
+
+    result = await client.save_board_as(
+        filename="C:/demo/output/demo-copy.kicad_pcb",
+        overwrite=True,
+        include_project=False,
+        dry_run=True,
+    )
+
+    assert result == {
+        "ok": True,
+        "mutation": "save_board_as",
+        "dry_run": True,
+        "commit_message": None,
+        "board": {
+            "name": "demo.kicad_pcb",
+            "document": {
+                "type": "1",
+                "board_filename": "demo.kicad_pcb",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+            },
+        },
+        "saved_filename": "C:/demo/output/demo-copy.kicad_pcb",
+        "overwrite": True,
+        "include_project": False,
+    }
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.board.calls == []
+
+
+async def test_save_board_as_executes_when_enabled() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=True), kicad_factory=FakeMutationKiCad)
+
+    result = await client.save_board_as(filename="C:/demo/output/demo-copy.kicad_pcb")
+
+    assert result["ok"] is True
+    assert result["saved_filename"] == "C:/demo/output/demo-copy.kicad_pcb"
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.board.calls == [
+        ("save_as", "C:/demo/output/demo-copy.kicad_pcb", False, True),
+    ]
+
+
+async def test_check_padstack_presence_on_layers_returns_presence_matrix() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeMutationKiCad)
+
+    result = await client.check_padstack_presence_on_layers(
+        item_ids=["via-id", "pad-id"],
+        layers=["F.Cu", "B.Cu"],
+    )
+
+    assert result == {
+        "ok": True,
+        "count": 2,
+        "item_ids": ["via-id", "pad-id"],
+        "resolved_layers": [
+            {"id": 0, "name": "F.Cu"},
+            {"id": 31, "name": "B.Cu"},
+        ],
+        "items": [
+            {
+                "item": {
+                    "id": "via-id",
+                    "kind": "FakeMutableVia",
+                    "position": {
+                        "x_nm": 3_000_000,
+                        "y_nm": 3_500_000,
+                        "x_mm": 3.0,
+                        "y_mm": 3.5,
+                    },
+                    "layer": None,
+                    "net": {"name": "+3V3", "code": 7},
+                    "locked": False,
+                    "diameter_nm": 600_000,
+                    "diameter_mm": 0.6,
+                    "drill_diameter_nm": 300_000,
+                    "drill_diameter_mm": 0.3,
+                    "type": 1,
+                },
+                "layers": [
+                    {"layer": {"id": 0, "name": "F.Cu"}, "present": True},
+                    {"layer": {"id": 31, "name": "B.Cu"}, "present": True},
+                ],
+            },
+            {
+                "item": {
+                    "id": "pad-id",
+                    "kind": "FakePad",
+                    "number": "1",
+                    "position": {
+                        "x_nm": 2_000_000,
+                        "y_nm": 4_000_000,
+                        "x_mm": 2.0,
+                        "y_mm": 4.0,
+                    },
+                    "net": {"name": "+3V3", "code": 7},
+                    "pad_type": "smd",
+                    "layers": [{"id": 0, "name": "F.Cu"}],
+                },
+                "layers": [
+                    {"layer": {"id": 0, "name": "F.Cu"}, "present": True},
+                    {"layer": {"id": 31, "name": "B.Cu"}, "present": False},
+                ],
+            },
+        ],
+    }
+
+
+async def test_get_pad_shapes_as_polygons_returns_polygonized_pads() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeMutationKiCad)
+
+    result = await client.get_pad_shapes_as_polygons(pad_ids=["pad-id"], layer="F.Cu")
+
+    assert result == {
+        "ok": True,
+        "count": 1,
+        "limit": 200,
+        "pad_ids": ["pad-id"],
+        "resolved_layer": {"id": 0, "name": "F.Cu"},
+        "items": [
+            {
+                "pad": {
+                    "id": "pad-id",
+                    "kind": "FakePad",
+                    "number": "1",
+                    "position": {
+                        "x_nm": 2_000_000,
+                        "y_nm": 4_000_000,
+                        "x_mm": 2.0,
+                        "y_mm": 4.0,
+                    },
+                    "net": {"name": "+3V3", "code": 7},
+                    "pad_type": "smd",
+                    "layers": [{"id": 0, "name": "F.Cu"}],
+                },
+                "polygon": {
+                    "outline": [
+                        {"x_nm": 1_750_000, "y_nm": 3_750_000, "x_mm": 1.75, "y_mm": 3.75},
+                        {"x_nm": 2_250_000, "y_nm": 3_750_000, "x_mm": 2.25, "y_mm": 3.75},
+                        {"x_nm": 2_250_000, "y_nm": 4_250_000, "x_mm": 2.25, "y_mm": 4.25},
+                        {"x_nm": 1_750_000, "y_nm": 4_250_000, "x_mm": 1.75, "y_mm": 4.25},
+                    ]
+                },
+            }
         ],
     }
 
@@ -809,6 +1751,591 @@ async def test_get_title_block_returns_serialized_metadata() -> None:
                 "2": "Internal",
             },
         },
+    }
+
+
+async def test_get_schematic_hierarchy_returns_serialized_tree() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    result = await client.get_schematic_hierarchy()
+
+    assert result == {
+        "ok": True,
+        "schematic": {
+            "name": "demo.kicad_sch",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+                "path": "C:/demo/demo.kicad_sch",
+            },
+        },
+        "count": 1,
+        "hierarchy": [
+            {
+                "name": "Root",
+                "filename": "demo.kicad_sch",
+                "page_number": "1",
+                "path": {
+                    "ids": ["root-sheet"],
+                    "text": "/root-sheet",
+                    "human_readable": "/Root",
+                },
+                "children": [
+                    {
+                        "name": "Power",
+                        "filename": "power.kicad_sch",
+                        "page_number": "2",
+                        "path": {
+                            "ids": ["root-sheet", "power-sheet"],
+                            "text": "/root-sheet/power-sheet",
+                            "human_readable": "/Root/Power",
+                        },
+                        "children": [],
+                    }
+                ],
+            }
+        ],
+    }
+
+
+async def test_get_schematic_netlist_returns_serialized_nets() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    result = await client.get_schematic_netlist(item_types=[1001])
+
+    assert result == {
+        "ok": True,
+        "schematic": {
+            "name": "demo.kicad_sch",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+                "path": "C:/demo/demo.kicad_sch",
+            },
+        },
+        "count": 1,
+        "item_types": [1001],
+        "nets": [
+            {
+                "name": "+3V3",
+                "sheets": [
+                    {
+                        "path": {
+                            "ids": ["root-sheet"],
+                            "text": "/root-sheet",
+                            "human_readable": "/Root",
+                        },
+                        "item_ids": ["symbol-1", "label-1"],
+                    }
+                ],
+            }
+        ],
+    }
+
+
+async def test_get_schematic_page_settings_returns_serialized_settings() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    result = await client.get_schematic_page_settings()
+
+    assert result == {
+        "ok": True,
+        "schematic": {
+            "name": "demo.kicad_sch",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+                "path": "C:/demo/demo.kicad_sch",
+            },
+        },
+        "page_settings": {
+            "page_size": 5,
+            "orientation": 1,
+            "drawing_sheet": "A4.kicad_wks",
+            "user_page_size": {
+                "x_nm": 210_000_000,
+                "y_nm": 297_000_000,
+                "x_mm": 210.0,
+                "y_mm": 297.0,
+            },
+        },
+    }
+
+
+async def test_get_schematic_title_block_returns_serialized_metadata() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    result = await client.get_schematic_title_block()
+
+    assert result == {
+        "ok": True,
+        "schematic": {
+            "name": "demo.kicad_sch",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+                "path": "C:/demo/demo.kicad_sch",
+            },
+        },
+        "title_block": {
+            "title": "Demo Schematic",
+            "revision": "A",
+            "date": "2026-05-19",
+            "company": "KiPilot Labs",
+            "comments": {
+                "1": "Main sheet",
+                "2": "Internal",
+            },
+        },
+    }
+
+
+async def test_hit_test_schematic_returns_true_for_point_inside_item_bounds() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    result = await client.hit_test_schematic(item_id="symbol-1", x_mm=3.0, y_mm=2.0)
+
+    assert result == {
+        "ok": True,
+        "schematic": {
+            "name": "demo.kicad_sch",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+                "path": "C:/demo/demo.kicad_sch",
+            },
+        },
+        "item_id": "symbol-1",
+        "position": {
+            "x_nm": 3_000_000,
+            "y_nm": 2_000_000,
+            "x_mm": 3.0,
+            "y_mm": 2.0,
+        },
+        "tolerance_nm": 0,
+        "tolerance_mm": 0.0,
+        "hit": True,
+    }
+
+
+async def test_hit_test_schematic_reports_missing_runtime_support() -> None:
+    class SchematicWithoutHitTestKiCad(FakeSchematicKiCad):
+        def __init__(self, **_kwargs: object) -> None:
+            self.schematic = FakeSchematicWithoutHitTest()
+
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=SchematicWithoutHitTestKiCad)
+
+    result = await client.hit_test_schematic(item_id="symbol-1", x_mm=3.0, y_mm=2.0)
+
+    assert result == {
+        "ok": False,
+        "message": "The active KiCad schematic does not expose hit_test().",
+        "error": "The active KiCad schematic does not expose hit_test().",
+    }
+
+
+async def test_export_schematic_svg_returns_job_summary() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    result = await client.export_schematic_svg("C:/exports/svg-output")
+
+    assert result == {
+        "ok": True,
+        "schematic": {
+            "name": "demo.kicad_sch",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+                "path": "C:/demo/demo.kicad_sch",
+            },
+        },
+        "format": "svg",
+        "output_kind": "directory",
+        "output_path": "C:/exports/svg-output",
+        "output_dir": "C:/exports/svg-output",
+        "requested_plot_settings": None,
+        "requested_options": None,
+        "job": {
+            "succeeded": True,
+            "status": 1,
+            "output_paths": ["C:/exports/svg-output"],
+            "message": "SVG export completed.",
+        },
+    }
+
+
+async def test_export_schematic_pdf_passes_plot_settings_and_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    monkeypatch.setattr(
+        KiCadIpcClient,
+        "_create_schematic_plot_settings",
+        lambda self, plot_settings: FakeSchematicPlotSettings(plot_settings),
+    )
+
+    result = await client.export_schematic_pdf(
+        "C:/exports/demo.pdf",
+        plot_settings={
+            "drawing_sheet": "A4.kicad_wks",
+            "plot_all": True,
+            "plot_pages": ["/", "/Power"],
+            "page_size": 2,
+            "theme": "Plot",
+        },
+        property_popups=True,
+        hierarchical_links=True,
+        include_metadata=False,
+    )
+
+    assert result == {
+        "ok": True,
+        "schematic": {
+            "name": "demo.kicad_sch",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+                "path": "C:/demo/demo.kicad_sch",
+            },
+        },
+        "format": "pdf",
+        "output_kind": "file",
+        "output_path": "C:/exports/demo.pdf",
+        "output_file": "C:/exports/demo.pdf",
+        "requested_plot_settings": {
+            "drawing_sheet": "A4.kicad_wks",
+            "default_font": "",
+            "variant": "",
+            "plot_all": True,
+            "plot_drawing_sheet": False,
+            "plot_pages": ["/", "/Power"],
+            "show_hop_over": False,
+            "black_and_white": False,
+            "page_size": 2,
+            "use_background_color": False,
+            "min_pen_width": 0,
+            "theme": "Plot",
+        },
+        "requested_options": {
+            "property_popups": True,
+            "hierarchical_links": True,
+            "include_metadata": False,
+        },
+        "job": {
+            "succeeded": True,
+            "status": 1,
+            "output_paths": ["C:/exports/demo.pdf"],
+            "message": "PDF export completed.",
+        },
+    }
+
+
+async def test_export_schematic_netlist_returns_job_summary() -> None:
+    FakeSchematicKiCad.last_instance = None
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    result = await client.export_schematic_netlist(
+        "C:/exports/demo.net",
+        netlist_format=8,
+        variant_name="Assembly",
+    )
+
+    assert result == {
+        "ok": True,
+        "schematic": {
+            "name": "demo.kicad_sch",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+                "path": "C:/demo/demo.kicad_sch",
+            },
+        },
+        "job_type": "netlist",
+        "netlist_format": 8,
+        "variant_name": "Assembly",
+        "output_kind": "file",
+        "output_path": "C:/exports/demo.net",
+        "output_file": "C:/exports/demo.net",
+        "job": {
+            "succeeded": True,
+            "status": 1,
+            "output_paths": ["C:/exports/demo.net"],
+            "message": "Netlist export completed.",
+        },
+    }
+
+    assert FakeSchematicKiCad.last_instance is not None
+    assert FakeSchematicKiCad.last_instance.schematic.last_export_netlist_call == {
+        "output_path": "C:/exports/demo.net",
+        "format": 8,
+        "variant_name": "Assembly",
+    }
+
+
+async def test_export_schematic_bom_passes_settings_and_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    FakeSchematicKiCad.last_instance = None
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    monkeypatch.setattr(
+        KiCadIpcClient,
+        "_create_schematic_bom_format_settings",
+        lambda self, format_settings: FakeSchematicBomFormatSettings(format_settings),
+    )
+    monkeypatch.setattr(
+        KiCadIpcClient,
+        "_create_schematic_bom_field_settings",
+        lambda self, field_settings: FakeSchematicBomFieldSettings(field_settings),
+    )
+
+    result = await client.export_schematic_bom(
+        "C:/exports/demo.csv",
+        format_settings={
+            "preset_name": "CSV",
+            "field_delimiter": ";",
+            "string_delimiter": '"',
+            "ref_delimiter": ",",
+            "ref_range_delimiter": "-",
+            "keep_tabs": True,
+            "keep_line_breaks": True,
+        },
+        field_settings={
+            "preset_name": "Grouped By Value",
+            "fields": [
+                {"name": "Reference", "label": "Refs", "group_by": True},
+                {"name": "Value", "label": "Value", "group_by": True},
+            ],
+            "sort_field": "Reference",
+            "sort_direction": 2,
+            "filter": "${DNP} != 1",
+        },
+        exclude_dnp=True,
+        group_symbols=True,
+        variant_name="Assembly",
+    )
+
+    assert result == {
+        "ok": True,
+        "schematic": {
+            "name": "demo.kicad_sch",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+                "path": "C:/demo/demo.kicad_sch",
+            },
+        },
+        "job_type": "bom",
+        "output_kind": "file",
+        "output_path": "C:/exports/demo.csv",
+        "output_file": "C:/exports/demo.csv",
+        "requested_format_settings": {
+            "preset_name": "CSV",
+            "field_delimiter": ";",
+            "string_delimiter": '"',
+            "ref_delimiter": ",",
+            "ref_range_delimiter": "-",
+            "keep_tabs": True,
+            "keep_line_breaks": True,
+        },
+        "requested_field_settings": {
+            "preset_name": "Grouped By Value",
+            "fields": [
+                {"name": "Reference", "label": "Refs", "group_by": True},
+                {"name": "Value", "label": "Value", "group_by": True},
+            ],
+            "sort_field": "Reference",
+            "sort_direction": 2,
+            "filter": "${DNP} != 1",
+        },
+        "requested_options": {
+            "exclude_dnp": True,
+            "group_symbols": True,
+            "variant_name": "Assembly",
+        },
+        "job": {
+            "succeeded": True,
+            "status": 1,
+            "output_paths": ["C:/exports/demo.csv"],
+            "message": "BOM export completed.",
+        },
+    }
+
+    assert FakeSchematicKiCad.last_instance is not None
+    assert FakeSchematicKiCad.last_instance.schematic.last_export_bom_call == {
+        "output_path": "C:/exports/demo.csv",
+        "format_settings": FakeSchematicBomFormatSettings(
+            {
+                "preset_name": "CSV",
+                "field_delimiter": ";",
+                "string_delimiter": '"',
+                "ref_delimiter": ",",
+                "ref_range_delimiter": "-",
+                "keep_tabs": True,
+                "keep_line_breaks": True,
+            }
+        ),
+        "field_settings": FakeSchematicBomFieldSettings(
+            {
+                "preset_name": "Grouped By Value",
+                "fields": [
+                    {"name": "Reference", "label": "Refs", "group_by": True},
+                    {"name": "Value", "label": "Value", "group_by": True},
+                ],
+                "sort_field": "Reference",
+                "sort_direction": 2,
+                "filter": "${DNP} != 1",
+            }
+        ),
+        "exclude_dnp": True,
+        "group_symbols": True,
+        "variant_name": "Assembly",
+    }
+
+
+async def test_export_schematic_svg_rejects_file_like_output_path() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    result = await client.export_schematic_svg("C:/exports/demo.svg")
+
+    assert result == {
+        "ok": False,
+        "message": (
+            "output_dir must point to an output directory for schematic SVG export, "
+            "not a .svg file path."
+        ),
+        "error": (
+            "output_dir must point to an output directory for schematic SVG export, "
+            "not a .svg file path."
+        ),
+    }
+
+
+async def test_export_schematic_pdf_rejects_directory_like_output_path() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    result = await client.export_schematic_pdf("C:/exports/pdf-output/")
+
+    assert result == {
+        "ok": False,
+        "message": (
+            "output_file must point to an output file for schematic PDF export, "
+            "not a directory path."
+        ),
+        "error": (
+            "output_file must point to an output file for schematic PDF export, "
+            "not a directory path."
+        ),
+    }
+
+
+async def test_export_schematic_netlist_rejects_directory_like_output_path() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FakeSchematicKiCad)
+
+    result = await client.export_schematic_netlist("C:/exports/netlist-output/")
+
+    assert result == {
+        "ok": False,
+        "message": (
+            "output_file must point to an output file for schematic NETLIST export, "
+            "not a directory path."
+        ),
+        "error": (
+            "output_file must point to an output file for schematic NETLIST export, "
+            "not a directory path."
+        ),
+    }
+
+
+async def test_export_schematic_plot_job_reports_missing_runtime_support() -> None:
+    class SchematicWithoutPlotExports(FakeSchematicKiCad):
+        def __init__(self, **_kwargs: object) -> None:
+            self.schematic = FakeSchematicWithoutExports()
+
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=SchematicWithoutPlotExports)
+
+    result = await client.export_schematic_ps("C:/exports/ps-output")
+
+    assert result == {
+        "ok": False,
+        "message": "The active KiCad schematic does not expose export_ps().",
+        "error": "The active KiCad schematic does not expose export_ps().",
+    }
+
+
+async def test_export_schematic_bom_reports_missing_runtime_support() -> None:
+    class SchematicWithoutBomExport(FakeSchematicKiCad):
+        def __init__(self, **_kwargs: object) -> None:
+            self.schematic = FakeSchematicWithoutExports()
+
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=SchematicWithoutBomExport)
+
+    result = await client.export_schematic_bom("C:/exports/demo.csv")
+
+    assert result == {
+        "ok": False,
+        "message": "The active KiCad schematic does not expose export_bom().",
+        "error": "The active KiCad schematic does not expose export_bom().",
+    }
+
+
+async def test_get_schematic_hierarchy_reports_missing_runtime_support() -> None:
+    class PcbOnlyKiCad:
+        def __init__(self, **_: object) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=PcbOnlyKiCad)
+
+    result = await client.get_schematic_hierarchy()
+
+    assert result == {
+        "ok": False,
+        "message": (
+            "The installed kicad-python runtime does not expose KiCad.get_schematic(). "
+            "Schematic MCP tools require a newer binding build with schematic IPC support."
+        ),
+        "error": (
+            "The installed kicad-python runtime does not expose KiCad.get_schematic(). "
+            "Schematic MCP tools require a newer binding build with schematic IPC support."
+        ),
     }
 
 
@@ -1389,7 +2916,8 @@ async def test_board_handler_error_is_actionable() -> None:
     result = await client.get_board_summary()
 
     assert result["ok"] is False
-    assert "does not expose PCB editor document APIs" in str(result["message"])
+    assert "does not expose this request" in str(result["message"])
+    assert "Open the target editor" in str(result["message"])
 
 
 async def test_set_visible_layers_requires_mutation_gate() -> None:
@@ -2461,6 +3989,200 @@ async def test_set_title_block_updates_board_when_enabled() -> None:
     ]
 
 
+async def test_set_schematic_page_settings_requires_changes() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=False), kicad_factory=FakeMutationKiCad)
+
+    result = await client.set_schematic_page_settings(dry_run=True)
+
+    assert result["ok"] is False
+    assert result["message"] == "At least one page settings field must be provided."
+
+
+async def test_set_schematic_page_settings_dry_run_previews_changes() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=False), kicad_factory=FakeMutationKiCad)
+
+    result = await client.set_schematic_page_settings(
+        page_size=6,
+        drawing_sheet="A3.kicad_wks",
+        user_page_size_mm={"x_mm": 420.0, "y_mm": 297.0},
+        dry_run=True,
+    )
+
+    assert result == {
+        "ok": True,
+        "mutation": "sch_set_page_settings",
+        "dry_run": True,
+        "commit_message": None,
+        "schematic": {
+            "name": "demo.kicad_sch",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+                "path": "C:/demo/demo.kicad_sch",
+            },
+        },
+        "previous_page_settings": {
+            "page_size": 5,
+            "orientation": 1,
+            "drawing_sheet": "A4.kicad_wks",
+            "user_page_size": {
+                "x_nm": 210_000_000,
+                "y_nm": 297_000_000,
+                "x_mm": 210.0,
+                "y_mm": 297.0,
+            },
+        },
+        "page_settings": {
+            "page_size": 6,
+            "orientation": 1,
+            "drawing_sheet": "A3.kicad_wks",
+            "user_page_size": {
+                "x_nm": 420_000_000,
+                "y_nm": 297_000_000,
+                "x_mm": 420.0,
+                "y_mm": 297.0,
+            },
+        },
+        "requested_changes": {
+            "page_size": 6,
+            "orientation": None,
+            "drawing_sheet": "A3.kicad_wks",
+            "user_page_size": {
+                "x_nm": 420_000_000,
+                "y_nm": 297_000_000,
+                "x_mm": 420.0,
+                "y_mm": 297.0,
+            },
+        },
+    }
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.schematic.calls == []
+
+
+async def test_set_schematic_page_settings_updates_when_enabled() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=True), kicad_factory=FakeMutationKiCad)
+
+    result = await client.set_schematic_page_settings(orientation=2)
+
+    assert result["ok"] is True
+    assert result["mutation"] == "sch_set_page_settings"
+    assert result["page_settings"] == {
+        "page_size": 5,
+        "orientation": 2,
+        "drawing_sheet": "A4.kicad_wks",
+        "user_page_size": {
+            "x_nm": 210_000_000,
+            "y_nm": 297_000_000,
+            "x_mm": 210.0,
+            "y_mm": 297.0,
+        },
+    }
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.schematic.calls == [
+        ("begin_commit",),
+        ("set_page_settings", 5, 2, "A4.kicad_wks", 210_000_000, 297_000_000),
+        ("push_commit", "fake-commit", "KiPilot MCP: sch_set_page_settings"),
+    ]
+
+
+async def test_set_schematic_title_block_dry_run_previews_merged_changes() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=False), kicad_factory=FakeMutationKiCad)
+
+    result = await client.set_schematic_title_block(
+        title="Updated Schematic",
+        comments={2: "Released", "3": "Customer"},
+        dry_run=True,
+    )
+
+    assert result == {
+        "ok": True,
+        "mutation": "sch_set_title_block",
+        "dry_run": True,
+        "commit_message": None,
+        "schematic": {
+            "name": "demo.kicad_sch",
+            "document": {
+                "type": "2",
+                "board_filename": "",
+                "project": {
+                    "name": "demo",
+                    "path": "C:/demo/demo.kicad_pro",
+                },
+                "path": "C:/demo/demo.kicad_sch",
+            },
+        },
+        "previous_title_block": {
+            "title": "Demo Schematic",
+            "revision": "A",
+            "date": "2026-05-19",
+            "company": "KiPilot Labs",
+            "comments": {
+                "1": "Main sheet",
+                "2": "Internal",
+            },
+        },
+        "title_block": {
+            "title": "Updated Schematic",
+            "revision": "A",
+            "date": "2026-05-19",
+            "company": "KiPilot Labs",
+            "comments": {
+                "1": "Main sheet",
+                "2": "Released",
+                "3": "Customer",
+            },
+        },
+        "requested_changes": {
+            "title": "Updated Schematic",
+            "revision": None,
+            "date": None,
+            "company": None,
+            "comments": {
+                "2": "Released",
+                "3": "Customer",
+            },
+        },
+    }
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.schematic.calls == []
+
+
+async def test_set_schematic_title_block_updates_when_enabled() -> None:
+    client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=True), kicad_factory=FakeMutationKiCad)
+
+    result = await client.set_schematic_title_block(revision="B", company="KiPilot Systems")
+
+    assert result["ok"] is True
+    assert result["mutation"] == "sch_set_title_block"
+    assert result["title_block"] == {
+        "title": "Demo Schematic",
+        "revision": "B",
+        "date": "2026-05-19",
+        "company": "KiPilot Systems",
+        "comments": {
+            "1": "Main sheet",
+            "2": "Internal",
+        },
+    }
+    assert FakeMutationKiCad.last_instance is not None
+    assert FakeMutationKiCad.last_instance.schematic.calls == [
+        ("begin_commit",),
+        (
+            "set_title_block",
+            "Demo Schematic",
+            "B",
+            "2026-05-19",
+            "KiPilot Systems",
+            {1: "Main sheet", 2: "Internal"},
+        ),
+        ("push_commit", "fake-commit", "KiPilot MCP: sch_set_title_block"),
+    ]
+
+
 async def test_update_board_text_dry_run_previews_text_change() -> None:
     client = KiCadIpcClient(KiCadIpcConfig(enable_mutations=False), kicad_factory=FakeMutationKiCad)
 
@@ -2964,15 +4686,58 @@ class FakeBoardKiCad:
         pass
 
 
+class FakeSchematicKiCad:
+    last_instance: FakeSchematicKiCad | None = None
+
+    def __init__(self, **_kwargs: object) -> None:
+        self.schematic = FakeSchematic()
+        type(self).last_instance = self
+
+    def get_schematic(self) -> FakeSchematic:
+        return self.schematic
+
+    def close(self) -> None:
+        pass
+
+
 class FakeMutationKiCad(FakeBoardKiCad):
     last_instance: FakeMutationKiCad | None = None
 
     def __init__(self, **_kwargs: object) -> None:
         self.board = FakeMutationBoard()
+        self.schematic = FakeMutationSchematic()
         FakeMutationKiCad.last_instance = self
 
     def get_board(self) -> FakeMutationBoard:
         return self.board
+
+    def get_schematic(self) -> FakeMutationSchematic:
+        return self.schematic
+
+    def get_text_extents(self, text: object) -> FakeBox:
+        box_getter = getattr(text, "bounding_box", None)
+        if callable(box_getter):
+            return box_getter()
+        raise AssertionError("text input does not provide bounding_box()")
+
+    def get_text_as_shapes(self, texts: object | list[object]) -> list[FakeCompoundShape]:
+        resolved_texts = texts if isinstance(texts, list) else [texts]
+        result = []
+        for text in resolved_texts:
+            box = self.get_text_extents(text)
+            result.append(
+                FakeCompoundShape(
+                    [
+                        FakeShape(
+                            f"{getattr(text, 'id', 'text')}-shape",
+                            getattr(text, "layer", 37),
+                            box.top_left,
+                            box.bottom_right,
+                        )
+                    ]
+                )
+            )
+        return result
 
 
 class FlakyRevertKiCad(FakeBoardKiCad):
@@ -3041,6 +4806,18 @@ class FakeBoard:
                 FakeVector(2_000_000, 2_000_000),
             ),
         ]
+
+    def get_dimensions(self) -> list[FakeDimension]:
+        return [FakeDimension()]
+
+    def get_groups(self) -> list[FakeGroup]:
+        return [FakeGroup()]
+
+    def get_reference_images(self) -> list[FakeReferenceImage]:
+        return [FakeReferenceImage()]
+
+    def get_barcodes(self) -> list[FakeBarcode]:
+        return [FakeBarcode()]
 
     def get_text(self) -> list[object]:
         return [
@@ -3293,6 +5070,108 @@ class FakeProject:
         ]
 
 
+class FakeMutationProject(FakeProject):
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, ...]] = []
+        self._text_variables = {
+            "BOARD_REV": "A",
+            "AUTHOR": "KiPilot",
+        }
+
+    def get_text_variables(self) -> dict[str, str]:
+        return dict(self._text_variables)
+
+    def expand_text_variables(self, text: str) -> str:
+        expanded = text
+        for key, value in self._text_variables.items():
+            expanded = expanded.replace(f"${{{key}}}", value)
+        return expanded
+
+    def set_text_variables(self, variables: object, merge_mode: int = 1) -> None:
+        if isinstance(variables, dict):
+            resolved = {str(key): str(value) for key, value in variables.items()}
+        elif hasattr(variables, "items"):
+            resolved = {str(key): str(value) for key, value in variables.items()}
+        elif hasattr(variables, "variables"):
+            resolved = {str(key): str(value) for key, value in dict(variables.variables).items()}
+        else:
+            resolved = {}
+
+        self.calls.append(("set_text_variables", dict(resolved), merge_mode))
+        if merge_mode == 2:
+            self._text_variables = dict(resolved)
+        else:
+            self._text_variables.update(resolved)
+
+
+class FakeGraphicsTextAttributes:
+    def __init__(
+        self,
+        *,
+        font_name: str,
+        angle: float,
+        line_spacing: float,
+        stroke_width: int,
+        italic: bool,
+        bold: bool,
+        underlined: bool,
+        mirrored: bool,
+        multiline: bool,
+        keep_upright: bool,
+        size: FakeVector,
+        horizontal_alignment: int,
+        vertical_alignment: int,
+    ) -> None:
+        self.font_name = font_name
+        self.angle = angle
+        self.line_spacing = line_spacing
+        self.stroke_width = stroke_width
+        self.italic = italic
+        self.bold = bold
+        self.underlined = underlined
+        self.mirrored = mirrored
+        self.multiline = multiline
+        self.keep_upright = keep_upright
+        self.size = size
+        self.horizontal_alignment = horizontal_alignment
+        self.vertical_alignment = vertical_alignment
+
+
+class FakeGraphicsDefault:
+    def __init__(self, *, layer: int, line_thickness: int, text: FakeGraphicsTextAttributes) -> None:
+        self.layer = layer
+        self.line_thickness = line_thickness
+        self.text = text
+
+
+class FakeEditorAppearanceSettings:
+    def __init__(
+        self,
+        other: "FakeEditorAppearanceSettings | None" = None,
+        *,
+        inactive_layer_display: int = 1,
+        net_color_display: int = 2,
+        board_flip: int = 1,
+        ratsnest_display: int = 3,
+    ) -> None:
+        if other is not None:
+            self.inactive_layer_display = other.inactive_layer_display
+            self.net_color_display = other.net_color_display
+            self.board_flip = other.board_flip
+            self.ratsnest_display = other.ratsnest_display
+            return
+
+        self.inactive_layer_display = inactive_layer_display
+        self.net_color_display = net_color_display
+        self.board_flip = board_flip
+        self.ratsnest_display = ratsnest_display
+
+
+class FakeCompoundShape:
+    def __init__(self, shapes: list[object]) -> None:
+        self.shapes = list(shapes)
+
+
 class FakeStackup:
     layers = [
         type(
@@ -3409,6 +5288,419 @@ class FakeTitleBlock:
         self.proto = self
 
 
+class FakeJobResult:
+    def __init__(self, *, output_path: str, message: str) -> None:
+        self.succeeded = True
+        self.status = 1
+        self.output_paths = [output_path]
+        self.message = message
+
+
+class FakePageSettings:
+    def __init__(
+        self,
+        proto: FakePageSettings | None = None,
+        *,
+        page_size: int = 5,
+        orientation: int = 1,
+        drawing_sheet: str = "A4.kicad_wks",
+        user_page_size: FakeVector | None = None,
+    ) -> None:
+        if proto is not None:
+            page_size = proto.page_size
+            orientation = proto.orientation
+            drawing_sheet = proto.drawing_sheet
+            user_page_size = FakeVector(proto.user_page_size.x, proto.user_page_size.y)
+
+        self.page_size = page_size
+        self.orientation = orientation
+        self.drawing_sheet = drawing_sheet
+        self.user_page_size = user_page_size or FakeVector(210_000_000, 297_000_000)
+        self.proto = self
+
+
+class FakeSchematicPlotSettings:
+    def __init__(self, values: dict[str, object] | None = None) -> None:
+        values = dict(values or {})
+        self.drawing_sheet = str(values.get("drawing_sheet", ""))
+        self.default_font = str(values.get("default_font", ""))
+        self.variant = str(values.get("variant", ""))
+        self.plot_all = bool(values.get("plot_all", False))
+        self.plot_drawing_sheet = bool(values.get("plot_drawing_sheet", False))
+        self.plot_pages = list(values.get("plot_pages", []))
+        self.show_hop_over = bool(values.get("show_hop_over", False))
+        self.black_and_white = bool(values.get("black_and_white", False))
+        self.page_size = int(values.get("page_size", 0))
+        self.use_background_color = bool(values.get("use_background_color", False))
+        self.min_pen_width = int(values.get("min_pen_width", 0))
+        self.theme = str(values.get("theme", ""))
+        self.proto = self
+        self.proto = self
+
+
+class FakeSchematicBomFormatSettings:
+    def __init__(self, values: dict[str, object] | None = None) -> None:
+        values = dict(values or {})
+        self.preset_name = str(values.get("preset_name", ""))
+        self.field_delimiter = str(values.get("field_delimiter", ""))
+        self.string_delimiter = str(values.get("string_delimiter", ""))
+        self.ref_delimiter = str(values.get("ref_delimiter", ""))
+        self.ref_range_delimiter = str(values.get("ref_range_delimiter", ""))
+        self.keep_tabs = bool(values.get("keep_tabs", False))
+        self.keep_line_breaks = bool(values.get("keep_line_breaks", False))
+        self.proto = self
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, FakeSchematicBomFormatSettings) and (
+            self.preset_name,
+            self.field_delimiter,
+            self.string_delimiter,
+            self.ref_delimiter,
+            self.ref_range_delimiter,
+            self.keep_tabs,
+            self.keep_line_breaks,
+        ) == (
+            other.preset_name,
+            other.field_delimiter,
+            other.string_delimiter,
+            other.ref_delimiter,
+            other.ref_range_delimiter,
+            other.keep_tabs,
+            other.keep_line_breaks,
+        )
+
+
+class FakeSchematicBomField:
+    def __init__(self, values: dict[str, object] | None = None) -> None:
+        values = dict(values or {})
+        self.name = str(values.get("name", ""))
+        self.label = str(values.get("label", ""))
+        self.group_by = bool(values.get("group_by", False))
+        self.proto = self
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, FakeSchematicBomField) and (
+            self.name,
+            self.label,
+            self.group_by,
+        ) == (
+            other.name,
+            other.label,
+            other.group_by,
+        )
+
+
+class FakeSchematicBomFieldSettings:
+    def __init__(self, values: dict[str, object] | None = None) -> None:
+        values = dict(values or {})
+        self.preset_name = str(values.get("preset_name", ""))
+        self.fields = [FakeSchematicBomField(field) for field in values.get("fields", [])]
+        self.sort_field = str(values.get("sort_field", ""))
+        self.sort_direction = int(values.get("sort_direction", 0))
+        self.filter = str(values.get("filter", ""))
+        self.proto = self
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, FakeSchematicBomFieldSettings) and (
+            self.preset_name,
+            self.fields,
+            self.sort_field,
+            self.sort_direction,
+            self.filter,
+        ) == (
+            other.preset_name,
+            other.fields,
+            other.sort_field,
+            other.sort_direction,
+            other.filter,
+        )
+
+
+class FakeSheetPath:
+    def __init__(
+        self,
+        path: list[str],
+        path_human_readable: str = "",
+    ) -> None:
+        self.path = list(path)
+        self.path_human_readable = path_human_readable
+
+
+class FakeSheetInstance:
+    def __init__(
+        self,
+        *,
+        name: str,
+        filename: str,
+        page_number: str,
+        path: FakeSheetPath,
+        children: list[FakeSheetInstance] | None = None,
+    ) -> None:
+        self.name = name
+        self.filename = filename
+        self.page_number = page_number
+        self.path = path
+        self.children = list(children or [])
+
+
+class FakeSchematicNetSheetContents:
+    def __init__(self, *, path: FakeSheetPath, items: list[str]) -> None:
+        self.path = path
+        self.items = list(items)
+
+
+class FakeSchematicNet:
+    def __init__(self, *, name: str, sheets: list[FakeSchematicNetSheetContents]) -> None:
+        self.name = name
+        self.sheets = list(sheets)
+
+
+class FakeSchematicLookupItem:
+    def __init__(self, item_id: str, top_left: FakeVector, bottom_right: FakeVector) -> None:
+        self.id = item_id
+        self._top_left = top_left
+        self._bottom_right = bottom_right
+
+    def bounding_box(self) -> FakeBox:
+        return FakeBox(self._top_left, self._bottom_right)
+
+
+class FakeSchematic:
+    name = "demo.kicad_sch"
+    document = type(
+        "FakeSchematicDocument",
+        (),
+        {
+            "type": 2,
+            "project": type(
+                "FakeSchematicProjectRef",
+                (),
+                {"name": "demo", "path": "C:/demo/demo.kicad_pro"},
+            )(),
+            "path": "C:/demo/demo.kicad_sch",
+        },
+    )()
+
+    def get_hierarchy(self) -> list[FakeSheetInstance]:
+        return [
+            FakeSheetInstance(
+                name="Root",
+                filename="demo.kicad_sch",
+                page_number="1",
+                path=FakeSheetPath(["root-sheet"], "/Root"),
+                children=[
+                    FakeSheetInstance(
+                        name="Power",
+                        filename="power.kicad_sch",
+                        page_number="2",
+                        path=FakeSheetPath(["root-sheet", "power-sheet"], "/Root/Power"),
+                    )
+                ],
+            )
+        ]
+
+    def get_netlist(self, types: object | None = None) -> list[FakeSchematicNet]:
+        if types == [1001]:
+            return [
+                FakeSchematicNet(
+                    name="+3V3",
+                    sheets=[
+                        FakeSchematicNetSheetContents(
+                            path=FakeSheetPath(["root-sheet"], "/Root"),
+                            items=["symbol-1", "label-1"],
+                        )
+                    ],
+                )
+            ]
+
+        return [
+            FakeSchematicNet(
+                name="+3V3",
+                sheets=[
+                    FakeSchematicNetSheetContents(
+                        path=FakeSheetPath(["root-sheet"], "/Root"),
+                        items=["symbol-1", "label-1"],
+                    )
+                ],
+            ),
+            FakeSchematicNet(
+                name="GND",
+                sheets=[
+                    FakeSchematicNetSheetContents(
+                        path=FakeSheetPath(["root-sheet", "power-sheet"], "/Root/Power"),
+                        items=["symbol-2", "label-2"],
+                    )
+                ],
+            ),
+        ]
+
+    def get_page_settings(self) -> FakePageSettings:
+        return FakePageSettings()
+
+    def get_title_block(self) -> FakeTitleBlock:
+        return FakeTitleBlock(
+            title="Demo Schematic",
+            revision="A",
+            date="2026-05-19",
+            company="KiPilot Labs",
+            comments={1: "Main sheet", 2: "Internal"},
+        )
+
+    def __init__(self) -> None:
+        self.last_export_netlist_call: dict[str, object] | None = None
+        self.last_export_bom_call: dict[str, object] | None = None
+        self._items_by_id = {
+            "symbol-1": FakeSchematicLookupItem(
+                "symbol-1",
+                FakeVector(1_000_000, 1_000_000),
+                FakeVector(5_000_000, 4_000_000),
+            )
+        }
+
+    def get_items_by_id(self, ids: object | list[object]) -> list[FakeSchematicLookupItem]:
+        resolved_ids = ids if isinstance(ids, list) else [ids]
+        result = []
+        for item_id in resolved_ids:
+            normalized_item_id = str(getattr(item_id, "value", item_id)).strip().lower()
+            item = self._items_by_id.get(normalized_item_id)
+            if item is not None:
+                result.append(item)
+        return result
+
+    def hit_test(self, item: object, position: FakeVector, tolerance: int = 0) -> bool:
+        box_getter = getattr(item, "bounding_box", None)
+        if not callable(box_getter):
+            return False
+
+        bounding_box = box_getter()
+        return (
+            bounding_box.top_left.x - tolerance <= position.x <= bounding_box.bottom_right.x + tolerance
+            and bounding_box.top_left.y - tolerance <= position.y <= bounding_box.bottom_right.y + tolerance
+        )
+
+    def export_svg(self, output_path: str, plot_settings: object | None = None) -> FakeJobResult:
+        return FakeJobResult(output_path=output_path, message="SVG export completed.")
+
+    def export_dxf(self, output_path: str, plot_settings: object | None = None) -> FakeJobResult:
+        return FakeJobResult(output_path=output_path, message="DXF export completed.")
+
+    def export_pdf(
+        self,
+        output_path: str,
+        plot_settings: object | None = None,
+        *,
+        property_popups: bool = False,
+        hierarchical_links: bool = False,
+        include_metadata: bool = True,
+    ) -> FakeJobResult:
+        return FakeJobResult(output_path=output_path, message="PDF export completed.")
+
+    def export_ps(self, output_path: str, plot_settings: object | None = None) -> FakeJobResult:
+        return FakeJobResult(output_path=output_path, message="PS export completed.")
+
+    def export_netlist(
+        self,
+        output_path: str,
+        format: int = 2,
+        variant_name: str = "",
+    ) -> FakeJobResult:
+        self.last_export_netlist_call = {
+            "output_path": output_path,
+            "format": format,
+            "variant_name": variant_name,
+        }
+        return FakeJobResult(output_path=output_path, message="Netlist export completed.")
+
+    def export_bom(
+        self,
+        output_path: str,
+        format_settings: object | None = None,
+        field_settings: object | None = None,
+        *,
+        exclude_dnp: bool = False,
+        group_symbols: bool = False,
+        variant_name: str = "",
+    ) -> FakeJobResult:
+        self.last_export_bom_call = {
+            "output_path": output_path,
+            "format_settings": format_settings,
+            "field_settings": field_settings,
+            "exclude_dnp": exclude_dnp,
+            "group_symbols": group_symbols,
+            "variant_name": variant_name,
+        }
+        return FakeJobResult(output_path=output_path, message="BOM export completed.")
+
+
+class FakeSchematicWithoutExports(FakeSchematic):
+    export_svg = None
+    export_dxf = None
+    export_pdf = None
+    export_ps = None
+    export_netlist = None
+    export_bom = None
+
+
+class FakeSchematicWithoutHitTest(FakeSchematic):
+    hit_test = None
+
+
+class FakeMutationSchematic(FakeSchematic):
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, ...]] = []
+        self._page_settings = FakePageSettings()
+        self._title_block = FakeTitleBlock(
+            title="Demo Schematic",
+            revision="A",
+            date="2026-05-19",
+            company="KiPilot Labs",
+            comments={1: "Main sheet", 2: "Internal"},
+        )
+
+    def begin_commit(self) -> str:
+        self.calls.append(("begin_commit",))
+        return "fake-commit"
+
+    def push_commit(self, commit: str, message: str = "") -> None:
+        self.calls.append(("push_commit", commit, message))
+
+    def drop_commit(self, commit: str) -> None:
+        self.calls.append(("drop_commit", commit))
+
+    def get_page_settings(self) -> FakePageSettings:
+        return FakePageSettings(self._page_settings)
+
+    def set_page_settings(self, page_settings: FakePageSettings) -> FakePageSettings:
+        self.calls.append(
+            (
+                "set_page_settings",
+                page_settings.page_size,
+                page_settings.orientation,
+                page_settings.drawing_sheet,
+                page_settings.user_page_size.x,
+                page_settings.user_page_size.y,
+            )
+        )
+        self._page_settings = FakePageSettings(page_settings)
+        return FakePageSettings(self._page_settings)
+
+    def get_title_block(self) -> FakeTitleBlock:
+        return FakeTitleBlock(self._title_block)
+
+    def set_title_block(self, title_block: FakeTitleBlock) -> None:
+        self.calls.append(
+            (
+                "set_title_block",
+                title_block.title,
+                title_block.revision,
+                title_block.date,
+                title_block.company,
+                dict(title_block.comments),
+            )
+        )
+        self._title_block = FakeTitleBlock(title_block)
+
+
 class FakeBox:
     def __init__(self, top_left: FakeVector, bottom_right: FakeVector) -> None:
         self.top_left = top_left
@@ -3496,10 +5788,107 @@ class FakeShape:
         return FakeBox(self.start, self.end)
 
 
+class FakeDimension:
+    id = "dimension-id"
+    layer = 44
+    locked = False
+    text = type("FakeDimensionText", (), {"value": "12.34 mm"})()
+    override_text_enabled = False
+    start = FakeVector(1_000_000, 1_000_000)
+    end = FakeVector(5_000_000, 3_000_000)
+    height = 1_000_000
+    extension_height = 500_000
+
+    def bounding_box(self) -> FakeBox:
+        return FakeBox(self.start, self.end)
+
+
+class FakeGroup:
+    id = "group-id"
+    name = "Placement cluster"
+    items = [FakeTrack(), type("FakeGroupMember", (), {"id": "shape-silk-1"})()]
+
+
+class FakeReferenceImage:
+    id = "reference-image-id"
+    layer = 37
+    locked = False
+    position = FakeVector(15_000_000, 5_000_000)
+    transform_origin_offset = FakeVector(500_000, 250_000)
+    image_scale = 0.5
+    image_data = b"PNGDATA"
+
+    def bounding_box(self) -> FakeBox:
+        return FakeBox(self.position, FakeVector(17_000_000, 6_500_000))
+
+
+class FakeBarcode:
+    id = "barcode-id"
+    text = "SN0001"
+    kind = "qr"
+    error_correction = "M"
+    position = FakeVector(25_000_000, 12_000_000)
+    orientation = FakeAngle(90)
+    layer = 37
+    width = 6_000_000
+    height = 6_000_000
+    show_text = True
+    text_height = 1_200_000
+    knockout = False
+    knockout_margin = FakeVector(200_000, 200_000)
+    locked = False
+
+    def bounding_box(self) -> FakeBox:
+        return FakeBox(self.position, FakeVector(31_000_000, 18_000_000))
+
+
 class FakeMutationBoard(FakeBoard):
     def __init__(self) -> None:
         self.calls: list[tuple[object, ...]] = []
+        self._project = FakeMutationProject()
         self._next_created_item_id = 1
+        self._selection_ids = ["track-id"]
+        self._graphics_defaults = {
+            1: FakeGraphicsDefault(
+                layer=1,
+                line_thickness=150_000,
+                text=FakeGraphicsTextAttributes(
+                    font_name="KiCad Font",
+                    angle=0.0,
+                    line_spacing=1.0,
+                    stroke_width=120_000,
+                    italic=False,
+                    bold=False,
+                    underlined=False,
+                    mirrored=False,
+                    multiline=False,
+                    keep_upright=True,
+                    size=FakeVector(1_000_000, 1_200_000),
+                    horizontal_alignment=1,
+                    vertical_alignment=2,
+                ),
+            ),
+            2: FakeGraphicsDefault(
+                layer=2,
+                line_thickness=200_000,
+                text=FakeGraphicsTextAttributes(
+                    font_name="KiCad Sans",
+                    angle=90.0,
+                    line_spacing=1.1,
+                    stroke_width=180_000,
+                    italic=True,
+                    bold=True,
+                    underlined=False,
+                    mirrored=False,
+                    multiline=True,
+                    keep_upright=False,
+                    size=FakeVector(1_500_000, 1_500_000),
+                    horizontal_alignment=2,
+                    vertical_alignment=3,
+                ),
+            ),
+        }
+        self._editor_appearance_settings = FakeEditorAppearanceSettings()
         self._active_layer = 0
         self._visible_layers = [0, 31, 44]
         self._enabled_layers = [0, 31, 44]
@@ -3609,6 +5998,97 @@ class FakeMutationBoard(FakeBoard):
             ),
         ]
 
+    def get_project(self) -> FakeMutationProject:
+        return self._project
+
+    def get_selection(self) -> list[object]:
+        return [item for item in self._all_items() if getattr(item, "id", "") in self._selection_ids]
+
+    def get_graphics_defaults(self) -> dict[int, FakeGraphicsDefault]:
+        return dict(self._graphics_defaults)
+
+    def get_editor_appearance_settings(self) -> FakeEditorAppearanceSettings:
+        return FakeEditorAppearanceSettings(self._editor_appearance_settings)
+
+    def set_editor_appearance_settings(self, settings: FakeEditorAppearanceSettings) -> None:
+        self.calls.append(
+            (
+                "set_editor_appearance_settings",
+                settings.inactive_layer_display,
+                settings.net_color_display,
+                settings.board_flip,
+                settings.ratsnest_display,
+            )
+        )
+        self._editor_appearance_settings = FakeEditorAppearanceSettings(settings)
+
+    def hit_test(self, item: object, position: FakeVector, tolerance: int = 0) -> bool:
+        box_getter = getattr(item, "bounding_box", None)
+        if not callable(box_getter):
+            return False
+
+        bounding_box = box_getter()
+        return (
+            bounding_box.top_left.x - tolerance <= position.x <= bounding_box.bottom_right.x + tolerance
+            and bounding_box.top_left.y - tolerance <= position.y <= bounding_box.bottom_right.y + tolerance
+        )
+
+    def check_padstack_presence_on_layers(
+        self,
+        items: object | list[object],
+        layers: int | list[int],
+    ) -> dict[object, dict[int, bool]]:
+        resolved_items = items if isinstance(items, list) else [items]
+        resolved_layers = layers if isinstance(layers, list) else [layers]
+        result: dict[object, dict[int, bool]] = {}
+        for item in resolved_items:
+            padstack_layers = list(getattr(getattr(item, "padstack", None), "layers", []))
+            result[item] = {int(layer): int(layer) in padstack_layers for layer in resolved_layers}
+        return result
+
+    def get_pad_shapes_as_polygons(
+        self,
+        pads: object | list[object],
+        layer: int = 0,
+    ) -> list[FakeMutablePolygon]:
+        resolved_pads = pads if isinstance(pads, list) else [pads]
+        polygons = []
+        for pad in resolved_pads:
+            if layer not in list(getattr(getattr(pad, "padstack", None), "layers", [])):
+                continue
+            position = getattr(pad, "position", FakeVector(0, 0))
+            polygons.append(
+                FakeMutablePolygon(
+                    outline=[
+                        FakeVector(position.x - 250_000, position.y - 250_000),
+                        FakeVector(position.x + 250_000, position.y - 250_000),
+                        FakeVector(position.x + 250_000, position.y + 250_000),
+                        FakeVector(position.x - 250_000, position.y + 250_000),
+                    ]
+                )
+            )
+        return polygons
+
+    def add_to_selection(self, items: object | list[object]) -> list[object]:
+        resolved_items = items if isinstance(items, list) else [items]
+        item_ids = [str(getattr(item, "id", "")) for item in resolved_items]
+        self.calls.append(("add_to_selection", item_ids))
+        for item_id in item_ids:
+            if item_id and item_id not in self._selection_ids:
+                self._selection_ids.append(item_id)
+        return self.get_selection()
+
+    def remove_from_selection(self, items: object | list[object]) -> list[object]:
+        resolved_items = items if isinstance(items, list) else [items]
+        item_ids = [str(getattr(item, "id", "")) for item in resolved_items]
+        self.calls.append(("remove_from_selection", item_ids))
+        self._selection_ids = [item_id for item_id in self._selection_ids if item_id not in item_ids]
+        return self.get_selection()
+
+    def clear_selection(self) -> None:
+        self.calls.append(("clear_selection",))
+        self._selection_ids = []
+
     def get_footprints(self) -> list[FakeMutableFootprint]:
         return list(self._footprints)
 
@@ -3623,6 +6103,15 @@ class FakeMutationBoard(FakeBoard):
 
     def get_text(self) -> list[object]:
         return list(self._text_items)
+
+    def _all_items(self) -> list[object]:
+        return [
+            *self._footprints,
+            *self._tracks,
+            *self._vias,
+            *self._zones,
+            *self._text_items,
+        ]
 
     def get_origin(self, origin_type: int) -> FakeVector:
         return self._origins[origin_type]
@@ -3752,6 +6241,9 @@ class FakeMutationBoard(FakeBoard):
 
     def save(self) -> None:
         self.calls.append(("save",))
+
+    def save_as(self, filename: str, overwrite: bool = False, include_project: bool = True) -> None:
+        self.calls.append(("save_as", filename, overwrite, include_project))
 
     def _clone_item(self, item: object) -> object:
         item_type = type(item)
@@ -4093,6 +6585,16 @@ class FakeMutableBoardText:
         self.attributes = attributes or FakeTextAttributes()
         self.proto = self
 
+    def as_text(self) -> FakeMutableBoardText:
+        return self
+
+    def bounding_box(self) -> FakeBox:
+        width = max(len(self.value), 1) * 500_000
+        return FakeBox(
+            self.position,
+            FakeVector(self.position.x + width, self.position.y + 1_000_000),
+        )
+
 
 class FakeMutableBoardTextBox:
     def __init__(
@@ -4124,6 +6626,12 @@ class FakeMutableBoardTextBox:
         self.locked = locked
         self.attributes = attributes or FakeTextAttributes()
         self.proto = self
+
+    def as_textbox(self) -> FakeMutableBoardTextBox:
+        return self
+
+    def bounding_box(self) -> FakeBox:
+        return FakeBox(self.top_left, self.bottom_right)
 
 
 class FakeMutableBoardPolygon:

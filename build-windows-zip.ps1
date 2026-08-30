@@ -81,9 +81,14 @@ try {
     }
 
     Write-KiPilotBuildStatus "Installing Windows packaging dependencies into .venv..."
-    & $venvPython -m pip install -e ".[build]"
+    & $venvPython -m pip install --no-deps -e .
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to install KiPilot build dependencies into .venv."
+        throw "Failed to install the KiPilot package into .venv for packaging."
+    }
+
+    & $venvPython -m pip install "pyinstaller>=6.14.0"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install PyInstaller into .venv."
     }
 
     if ($Clean) {

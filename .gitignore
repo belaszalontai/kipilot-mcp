@@ -38,6 +38,9 @@ htmlcov/
 
 # Log files
 *.log
+
+# Local scratch / temp output directories
+.tmp/
 .logs/
 
 # Local editor workspace files

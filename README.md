@@ -4,9 +4,9 @@
 
 # KiPilot MCP
 
-KiPilot is a Python-based Model Context Protocol (MCP) server that connects MCP-aware clients, such as GitHub Copilot in VS Code, to a user-controlled KiCad 10.x PCB Editor session through the official `kicad-python` IPC binding.
+KiPilot is a Python-based Model Context Protocol (MCP) server that connects MCP-aware clients, such as GitHub Copilot in VS Code, to a user-controlled KiCad 10.x GUI session through the official `kicad-python` IPC binding.
 
-The server runs over `stdio`, exposes board-aware MCP tools, and is designed for live KiCad PCB workflows where the user keeps full control of the GUI session.
+The server runs over `stdio`, exposes PCB-first MCP tools plus a build-gated schematic subset, and is designed for live KiCad workflows where the user keeps full control of the GUI session.
 
 ## Usage Videos
 
@@ -18,11 +18,12 @@ Public project documentation is available at [kipilot.org/docs.html](https://kip
 
 ## Overview
 
-KiPilot exists to let an MCP client inspect and manipulate the PCB that is already open in KiCad.
+KiPilot exists to let an MCP client inspect and manipulate KiCad documents that are already open in the user-controlled GUI session, with PCB workflows as the primary baseline.
 
 - Uses the official KiCad IPC path through `kicad-python`
 - Runs as a `stdio` MCP server for VS Code and similar hosts
 - Supports read-heavy PCB workflows plus guarded mutation tools
+- Adds a source-build-gated schematic surface for hierarchy, hit-testing, metadata mutation, and export workflows where the running KiCad build exposes the newer schematic IPC handlers
 - Adds selected higher-level MCP helpers on top of raw IPC primitives, such as a real footprint side-flip workflow that mirrors child artwork and swaps paired layers
 - Keeps KiCad as a separate, user-launched GUI application
 
@@ -37,17 +38,39 @@ Implemented MCP surface includes:
 - MCP stdio server entry point
 - Async-friendly KiCad IPC client wrapper around `kipy.KiCad`
 - Connectivity and version checks such as `ping_kicad` and `get_kicad_version`
-- Board and document inspection tools for open documents, outlines, stackup, footprints, nets, pads, tracks, vias, zones, graphics, text, origins, title blocks, and connectivity
+- Board and document inspection tools for open documents, outlines, stackup, footprints, nets, pads, tracks, vias, zones, graphics, dimensions, groups, reference images, barcodes, text, text geometry, project text variables, project net classes, origins, title blocks, selection state, and connectivity
 - Filtered lookup tools for footprints, footprint-scoped pads, nets, net classes, and connected items
 - Guarded mutation tools for visible layers, active layer, enabled layers, footprint move/rotate/flip, footprint pad net reassignment, origins, title block fields, board text, track creation, via creation, item updates, track geometry, zone outlines, item deletion, zone refill, board revert, and board save
+- Schematic hierarchy, netlist, hit-testing, page-settings, title-block, metadata-mutation, and export tools when the active KiCad runtime exposes schematic IPC support
 - Unit tests for IPC connection and error-handling behavior
 
 Committed baseline:
 
 - GUI IPC only
 - PCB editor first
+- Initial schematic inspection, hit-testing, metadata mutation, and export workflows are supported only when the running KiCad build exposes the newer schematic IPC surface
 - Read-heavy workflows first, validated mutation workflows second
-- No committed schematic, export, plot, or headless automation scope
+- No committed headless automation scope
+
+## Schematic MCP Surface
+
+The schematic surface is intentionally smaller and more runtime-dependent than the PCB surface.
+
+Available schematic tools:
+
+- Inspection: `kicad_sch_get_hierarchy`, `kicad_sch_get_netlist`, `kicad_sch_get_page_settings`, and `kicad_sch_get_title_block`
+- Inspection geometry: `kicad_sch_hit_test`
+- Guarded metadata mutation: `kicad_sch_set_page_settings` and `kicad_sch_set_title_block`
+- Plot export: `kicad_sch_export_svg`, `kicad_sch_export_dxf`, `kicad_sch_export_pdf`, and `kicad_sch_export_ps`
+- File export: `kicad_sch_export_netlist` and `kicad_sch_export_bom`
+
+Important export semantics:
+
+- `kicad_sch_export_svg`, `kicad_sch_export_dxf`, and `kicad_sch_export_ps` take `output_dir` because KiCad writes one file per plotted sheet into a directory.
+- `kicad_sch_export_pdf` takes `output_file` because KiCad writes one PDF file to a file path.
+- `kicad_sch_export_netlist` and `kicad_sch_export_bom` also take `output_file` because they produce single file outputs.
+- When you want a full schematic export, `plot_all=true` with omitted `plot_pages` is the safest default unless you already know the exact sheet-instance paths to filter.
+- In this environment, live end-to-end schematic MCP validation succeeded against a locally built `kicad-master` `eeschema` snapshot. The installed official KiCad 10.0.1 build did not expose the same reliable external schematic IPC behavior, so treat the schematic surface as source-build-gated rather than universally available across all KiCad 10 installations.
 
 ## Requirements
 
@@ -252,6 +275,9 @@ Release process checklist: see `RELEASE-CHECKLIST.md`.
 |       |-- config.py
 |       |-- errors.py
 |       |-- ipc_client.py
+|       |-- ipc_client_core.py
+|       |-- ipc_client_pcb.py
+|       |-- ipc_client_sch.py
 |       |-- lookups.py
 |       |-- serializers.py
 |       `-- server.py
