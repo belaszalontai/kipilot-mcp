@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 from .ipc_client_core import *  # noqa: F401,F403
 from .serializers import (
@@ -10,7 +12,130 @@ from .serializers import (
     serialize_schematic_bom_format_settings,
 )
 
+try:
+    from kipy.common_types import (  # type: ignore[import-not-found]
+        LibraryIdentifier as KiCadLibraryIdentifier,
+    )
+    from kipy.common_types import Text as KiCadText  # type: ignore[import-not-found]
+    from kipy.proto.schematic import (  # type: ignore[import-not-found]
+        schematic_types_pb2 as KiCadSchematicProto,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        GlobalLabel as KiCadGlobalLabel,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        HierarchicalLabel as KiCadHierarchicalLabel,
+    )
+    from kipy.schematic_types import Junction as KiCadJunction  # type: ignore[import-not-found]
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        LocalLabel as KiCadLocalLabel,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        NoConnectMarker as KiCadNoConnectMarker,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SchematicLine as KiCadSchematicLine,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SchematicSymbol as KiCadSchematicSymbol,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SchematicSymbolInstance as KiCadSchematicSymbolInstance,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SchematicText as KiCadSchematicText,
+    )
+except ModuleNotFoundError:  # pragma: no cover - depends on local environment
+    KiCadLibraryIdentifier = None
+    KiCadText = None
+    KiCadSchematicProto = None
+    KiCadGlobalLabel = None
+    KiCadHierarchicalLabel = None
+    KiCadJunction = None
+    KiCadLocalLabel = None
+    KiCadNoConnectMarker = None
+    KiCadSchematicLine = None
+    KiCadSchematicSymbol = None
+    KiCadSchematicSymbolInstance = None
+    KiCadSchematicText = None
+
 DEFAULT_SCHEMATIC_NETLIST_FORMAT = 2
+
+DEFAULT_SCHEMATIC_ITEM_LIMIT = 200
+SCH_CREATE_ITEM_KINDS = (
+    "wire",
+    "bus",
+    "junction",
+    "no_connect",
+    "label",
+    "global_label",
+    "hierarchical_label",
+    "text",
+    "symbol",
+)
+SCH_LABEL_KINDS = ("label", "global_label", "hierarchical_label")
+SCH_LABEL_SPIN_STYLE_NAMES = {
+    "left": "SLSS_LEFT",
+    "up": "SLSS_UP",
+    "right": "SLSS_RIGHT",
+    "bottom": "SLSS_BOTTOM",
+    "unknown": "SLSS_UNKNOWN",
+}
+SCH_LABEL_SPIN_STYLE_FALLBACK = {
+    "SLSS_UNKNOWN": 0,
+    "SLSS_LEFT": 1,
+    "SLSS_UP": 2,
+    "SLSS_RIGHT": 3,
+    "SLSS_BOTTOM": 4,
+}
+SCH_LABEL_SHAPE_NAMES = {
+    "input": "SLSH_INPUT",
+    "output": "SLSH_OUTPUT",
+    "bidirectional": "SLSH_BIDI",
+    "bidi": "SLSH_BIDI",
+    "tri_state": "SLSH_TRISTATE",
+    "tristate": "SLSH_TRISTATE",
+    "passive": "SLSH_PASSIVE",
+    "dot": "SLSH_DOT",
+    "circle": "SLSH_CIRCLE",
+    "diamond": "SLSH_DIAMOND",
+    "rectangle": "SLSH_RECTANGLE",
+}
+SCH_LABEL_SHAPE_FALLBACK = {
+    "SLSH_UNKNOWN": 0,
+    "SLSH_INPUT": 1,
+    "SLSH_OUTPUT": 2,
+    "SLSH_BIDI": 3,
+    "SLSH_TRISTATE": 4,
+    "SLSH_PASSIVE": 5,
+    "SLSH_DOT": 6,
+    "SLSH_CIRCLE": 7,
+    "SLSH_DIAMOND": 8,
+    "SLSH_RECTANGLE": 9,
+}
+SCH_CREATABLE_ITEM_TYPES = {
+    "wire": KiCadSchematicLine,
+    "bus": KiCadSchematicLine,
+    "junction": KiCadJunction,
+    "no_connect": KiCadNoConnectMarker,
+    "label": KiCadLocalLabel,
+    "global_label": KiCadGlobalLabel,
+    "hierarchical_label": KiCadHierarchicalLabel,
+    "text": KiCadSchematicText,
+    "symbol": KiCadSchematicSymbolInstance,
+}
+SCH_UPDATABLE_FIELDS = (
+    "x_mm",
+    "y_mm",
+    "text",
+    "reference",
+    "value",
+    "unit",
+    "spin_style",
+    "shape",
+    "diameter_mm",
+    "locked",
+)
 
 
 class KiCadSchematicClientMixin:
@@ -330,6 +455,292 @@ class KiCadSchematicClientMixin:
             dry_run=dry_run,
         )
 
+    async def create_schematic_items(
+        self,
+        *,
+        items: Sequence[dict[str, Any]],
+        dry_run: bool = False,
+        commit_message: str | None = None,
+    ) -> dict[str, Any]:
+        """Create schematic items from declarative item specifications."""
+
+        return await self._run_schematic_write(
+            lambda schematic, is_dry_run: self._create_schematic_items(
+                schematic,
+                items=items,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to create schematic items through the IPC API.",
+            mutation_name="sch_create_items",
+            dry_run=dry_run,
+            commit_message=commit_message,
+        )
+
+    async def update_schematic_items(
+        self,
+        *,
+        updates: Sequence[dict[str, Any]],
+        dry_run: bool = False,
+        commit_message: str | None = None,
+    ) -> dict[str, Any]:
+        """Update existing schematic items by item ID."""
+
+        return await self._run_schematic_write(
+            lambda schematic, is_dry_run: self._update_schematic_items(
+                schematic,
+                updates=updates,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to update schematic items through the IPC API.",
+            mutation_name="sch_update_items",
+            dry_run=dry_run,
+            commit_message=commit_message,
+        )
+
+    async def remove_schematic_items(
+        self,
+        *,
+        item_ids: Sequence[str],
+        dry_run: bool = False,
+        commit_message: str | None = None,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Delete schematic items by item ID."""
+
+        return await self._run_schematic_write(
+            lambda schematic, is_dry_run: self._remove_schematic_items(
+                schematic,
+                item_ids=item_ids,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to delete schematic items through the IPC API.",
+            mutation_name="sch_remove_items",
+            dry_run=dry_run,
+            commit_message=commit_message,
+            dangerous=True,
+            force=force,
+        )
+
+    async def save_schematic(self, *, dry_run: bool = False) -> dict[str, Any]:
+        """Save the current schematic document to disk."""
+
+        return await self._run_schematic_command(
+            self._save_schematic,
+            default_message="Unable to save the current schematic through the IPC API.",
+            mutation_name="sch_save",
+            dry_run=dry_run,
+        )
+
+    async def get_schematic_items(
+        self,
+        *,
+        limit: int = DEFAULT_SCHEMATIC_ITEM_LIMIT,
+        kinds: Sequence[str] | None = None,
+    ) -> dict[str, Any]:
+        """Return schematic items, optionally filtered to a set of item kinds."""
+
+        return await self._run_schematic_read(
+            lambda schematic: self._get_schematic_items(
+                schematic,
+                limit=limit,
+                kinds=kinds,
+            ),
+            default_message="Unable to read schematic items through the IPC API.",
+        )
+
+    async def get_schematic_symbols(
+        self,
+        *,
+        limit: int = DEFAULT_SCHEMATIC_ITEM_LIMIT,
+    ) -> dict[str, Any]:
+        """Return the symbol instances placed in the current schematic."""
+
+        return await self._run_schematic_read(
+            lambda schematic: self._get_schematic_symbols(schematic, limit=limit),
+            default_message="Unable to read schematic symbols through the IPC API.",
+        )
+
+    async def get_schematic_labels(
+        self,
+        *,
+        limit: int = DEFAULT_SCHEMATIC_ITEM_LIMIT,
+    ) -> dict[str, Any]:
+        """Return the labels placed in the current schematic."""
+
+        return await self._run_schematic_read(
+            lambda schematic: self._get_schematic_labels(schematic, limit=limit),
+            default_message="Unable to read schematic labels through the IPC API.",
+        )
+
+    async def get_schematic_as_string(self) -> dict[str, Any]:
+        """Return the whole schematic document as native KiCad s-expression text."""
+
+        return await self._run_schematic_read(
+            self._get_schematic_as_string,
+            default_message="Unable to read the schematic document text through the IPC API.",
+        )
+
+    async def get_schematic_selection_as_string(self) -> dict[str, Any]:
+        """Return the current selection as native KiCad s-expression text."""
+
+        return await self._run_schematic_read(
+            self._get_schematic_selection_as_string,
+            default_message=(
+                "Unable to read the schematic selection text through the IPC API."
+            ),
+        )
+
+    async def is_schematic_document_modified(self) -> dict[str, Any]:
+        """Report whether the schematic has unsaved modifications."""
+
+        return await self._run_schematic_read(
+            self._is_schematic_document_modified,
+            default_message=(
+                "Unable to read the schematic modified state through the IPC API."
+            ),
+        )
+
+    async def get_schematic_variants(self) -> dict[str, Any]:
+        """Return the design variants defined in the current schematic."""
+
+        return await self._run_schematic_read(
+            self._get_schematic_variants,
+            default_message="Unable to read schematic variants through the IPC API.",
+        )
+
+    async def get_current_schematic_variant(self) -> dict[str, Any]:
+        """Return the currently applied schematic variant."""
+
+        return await self._run_schematic_read(
+            self._get_current_schematic_variant,
+            default_message=(
+                "Unable to read the current schematic variant through the IPC API."
+            ),
+        )
+
+    async def add_schematic_variant(
+        self,
+        *,
+        name: str,
+        description: str | None = None,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Add a design variant to the current schematic."""
+
+        return await self._run_schematic_command(
+            lambda schematic, is_dry_run: self._add_schematic_variant(
+                schematic,
+                name=name,
+                description=description,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to add the schematic variant through the IPC API.",
+            mutation_name="sch_add_variant",
+            dry_run=dry_run,
+        )
+
+    async def delete_schematic_variant(self, *, name: str, dry_run: bool = False) -> dict[str, Any]:
+        """Delete a design variant from the current schematic."""
+
+        return await self._run_schematic_command(
+            lambda schematic, is_dry_run: self._delete_schematic_variant(
+                schematic,
+                name=name,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to delete the schematic variant through the IPC API.",
+            mutation_name="sch_delete_variant",
+            dry_run=dry_run,
+        )
+
+    async def rename_schematic_variant(
+        self,
+        *,
+        old_name: str,
+        new_name: str,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Rename a design variant in the current schematic."""
+
+        return await self._run_schematic_command(
+            lambda schematic, is_dry_run: self._rename_schematic_variant(
+                schematic,
+                old_name=old_name,
+                new_name=new_name,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to rename the schematic variant through the IPC API.",
+            mutation_name="sch_rename_variant",
+            dry_run=dry_run,
+        )
+
+    async def copy_schematic_variant(
+        self,
+        *,
+        old_name: str,
+        new_name: str,
+        new_description: str | None = None,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Copy a design variant, including its item overrides."""
+
+        return await self._run_schematic_command(
+            lambda schematic, is_dry_run: self._copy_schematic_variant(
+                schematic,
+                old_name=old_name,
+                new_name=new_name,
+                new_description=new_description,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to copy the schematic variant through the IPC API.",
+            mutation_name="sch_copy_variant",
+            dry_run=dry_run,
+        )
+
+    async def set_schematic_variant_description(
+        self,
+        *,
+        name: str,
+        description: str,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Set the description of a design variant."""
+
+        return await self._run_schematic_command(
+            lambda schematic, is_dry_run: self._set_schematic_variant_description(
+                schematic,
+                name=name,
+                description=description,
+                dry_run=is_dry_run,
+            ),
+            default_message=(
+                "Unable to update the schematic variant description through the IPC API."
+            ),
+            mutation_name="sch_set_variant_description",
+            dry_run=dry_run,
+        )
+
+    async def set_current_schematic_variant(
+        self,
+        *,
+        name: str | None = None,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Select the active schematic variant, or the default variant when name is omitted."""
+
+        return await self._run_schematic_command(
+            lambda schematic, is_dry_run: self._set_current_schematic_variant(
+                schematic,
+                name=name,
+                dry_run=is_dry_run,
+            ),
+            default_message=(
+                "Unable to select the schematic variant through the IPC API."
+            ),
+            mutation_name="sch_set_current_variant",
+            dry_run=dry_run,
+        )
+
     async def _run_schematic_read(
         self,
         operation: Callable[[Any], dict[str, Any]],
@@ -423,6 +834,42 @@ class KiCadSchematicClientMixin:
             "mutation": mutation_name,
             "dry_run": dry_run,
             "commit_message": None if dry_run else resolved_commit_message,
+            **result,
+        }
+
+    async def _run_schematic_command(
+        self,
+        operation: Callable[[Any, bool], dict[str, Any]],
+        *,
+        default_message: str,
+        mutation_name: str,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        try:
+            self._assert_mutation_allowed(dry_run=dry_run, dangerous=False, force=False)
+            return await asyncio.to_thread(
+                self._execute_schematic_command,
+                operation,
+                mutation_name,
+                dry_run,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return self._translate_error(exc, default_message=default_message)
+
+    def _execute_schematic_command(
+        self,
+        operation: Callable[[Any, bool], dict[str, Any]],
+        mutation_name: str,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        """Run a schematic mutation that is not part of an item commit transaction."""
+
+        result = self._with_schematic(lambda schematic: operation(schematic, dry_run))
+        return {
+            "ok": True,
+            "mutation": mutation_name,
+            "dry_run": dry_run,
+            "commit_message": None,
             **result,
         }
 
@@ -932,7 +1379,9 @@ class KiCadSchematicClientMixin:
                 raise KiCadCapabilityError(
                     "The active KiCad schematic does not expose set_page_settings()."
                 )
-            current_page_settings = set_page_settings(updated_page_settings) or updated_page_settings
+            current_page_settings = (
+                set_page_settings(updated_page_settings) or updated_page_settings
+            )
         else:
             current_page_settings = updated_page_settings
 
@@ -1008,6 +1457,958 @@ class KiCadSchematicClientMixin:
             },
         }
 
+    # ------------------------------------------------------------------
+    # Item creation
+    # ------------------------------------------------------------------
+    def _create_schematic_items(
+        self,
+        schematic: Any,
+        *,
+        items: Sequence[dict[str, Any]],
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        specs = self._normalize_schematic_item_specs(items)
+        preview = self._build_schematic_items(schematic, specs)
+
+        applied = preview
+        if not dry_run:
+            applied = self._commit_new_schematic_items(schematic, preview)
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "count": len(applied),
+            "requested_specs": len(specs),
+            "kinds": [spec["kind"] for spec in specs],
+            "created": [serialize_schematic_item(item) for item in applied],
+        }
+
+    def _commit_new_schematic_items(self, schematic: Any, preview: Sequence[Any]) -> list[Any]:
+        create_items = getattr(schematic, "create_items", None)
+        if not callable(create_items):
+            raise KiCadCapabilityError(
+                "The active KiCad schematic does not expose create_items(). "
+                "Schematic editing requires KiCad 10.x with IPC API enabled."
+            )
+
+        try:
+            created = create_items(list(preview))
+        except TypeError:
+            if len(preview) != 1:
+                raise
+            created = create_items(preview[0])
+
+        resolved = list(self._as_item_sequence(created))
+        return resolved or list(preview)
+
+    def _normalize_schematic_item_specs(
+        self, items: Sequence[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        if not items:
+            raise KiCadLookupError("At least one schematic item specification is required.")
+
+        specs: list[dict[str, Any]] = []
+        for index, item in enumerate(items, start=1):
+            if not isinstance(item, dict):
+                raise KiCadLookupError(f"Schematic item specification {index} must be an object.")
+
+            kind = str(item.get("kind", "")).strip().lower()
+            if kind not in SCH_CREATE_ITEM_KINDS:
+                raise KiCadLookupError(
+                    f"Unsupported schematic item kind {item.get('kind')!r} at position {index}. "
+                    f"Supported kinds: {', '.join(SCH_CREATE_ITEM_KINDS)}."
+                )
+            specs.append({**item, "kind": kind})
+
+        return specs
+
+    def _build_schematic_items(
+        self, schematic: Any, specs: Sequence[dict[str, Any]]
+    ) -> list[Any]:
+        built: list[Any] = []
+        for spec in specs:
+            built.extend(self._build_schematic_items_from_spec(schematic, spec))
+
+        if not built:
+            raise KiCadLookupError("The provided schematic item specifications produced no items.")
+
+        return built
+
+    def _build_schematic_items_from_spec(
+        self, schematic: Any, spec: dict[str, Any]
+    ) -> list[Any]:
+        kind = spec["kind"]
+        if kind in ("wire", "bus"):
+            return self._build_schematic_line_items(schematic, spec, kind)
+        if kind == "junction":
+            return [self._build_schematic_junction_item(schematic, spec)]
+        if kind == "no_connect":
+            return [self._build_schematic_no_connect_item(schematic, spec)]
+        if kind in SCH_LABEL_KINDS:
+            return [self._build_schematic_label_item(schematic, spec, kind)]
+        if kind == "text":
+            return [self._build_schematic_text_item(schematic, spec)]
+        if kind == "symbol":
+            return [self._build_schematic_symbol_item(schematic, spec)]
+
+        raise KiCadLookupError(f"Unsupported schematic item kind {kind!r}.")
+
+    def _build_schematic_line_items(
+        self, schematic: Any, spec: dict[str, Any], kind: str
+    ) -> list[Any]:
+        label = "wire polyline" if kind == "wire" else "bus polyline"
+        points = self._normalize_points(spec.get("points"), minimum=2, label=label)
+        line_type = self._schematic_enum_value(
+            "SchematicLineType",
+            "SLT_WIRE" if kind == "wire" else "SLT_BUS",
+            fallback=1 if kind == "wire" else 2,
+        )
+        locked = self._resolve_schematic_locked(spec)
+
+        segments: list[Any] = []
+        for start_point, end_point in zip(points, points[1:], strict=False):
+            line = self._new_schematic_item(
+                schematic,
+                item_type=KiCadSchematicLine,
+                getter_name="get_lines",
+                kind_name="schematic line",
+            )
+            self._set_schematic_attribute(
+                line, "start", self._point_vector(schematic, start_point), label
+            )
+            self._set_schematic_attribute(
+                line, "end", self._point_vector(schematic, end_point), label
+            )
+
+            self._set_schematic_attribute(line, "type", line_type, label)
+            if locked is not None:
+                self._set_schematic_attribute(line, "locked", locked, label)
+            segments.append(line)
+
+        return segments
+
+    def _build_schematic_junction_item(self, schematic: Any, spec: dict[str, Any]) -> Any:
+        junction = self._new_schematic_item(
+            schematic,
+            item_type=KiCadJunction,
+            getter_name="get_junctions",
+            kind_name="junction",
+        )
+        position = self._required_schematic_point(schematic, spec, label="junction")
+        self._set_schematic_attribute(junction, "position", position, "junction")
+
+        diameter_mm = spec.get("diameter_mm")
+        if diameter_mm is not None:
+            self._set_schematic_attribute(
+                junction,
+                "diameter",
+                self._validate_positive_measurement_mm(diameter_mm, field_name="diameter_mm"),
+                "junction",
+            )
+
+        locked = self._resolve_schematic_locked(spec)
+        if locked is not None:
+            self._set_schematic_attribute(junction, "locked", locked, "junction")
+
+        return junction
+
+    def _build_schematic_no_connect_item(self, schematic: Any, spec: dict[str, Any]) -> Any:
+        marker = self._new_schematic_item(
+            schematic,
+            item_type=KiCadNoConnectMarker,
+            getter_name="get_no_connects",
+            kind_name="no-connect marker",
+        )
+        self._set_schematic_attribute(
+            marker,
+            "position",
+            self._required_schematic_point(schematic, spec, label="no-connect marker"),
+            "no-connect marker",
+        )
+
+        locked = self._resolve_schematic_locked(spec)
+        if locked is not None:
+            self._set_schematic_attribute(marker, "locked", locked, "no-connect marker")
+
+        return marker
+
+    def _build_schematic_label_item(
+        self, schematic: Any, spec: dict[str, Any], kind: str
+    ) -> Any:
+        item_type = SCH_CREATABLE_ITEM_TYPES[kind]
+        label = self._new_schematic_item(
+            schematic,
+            item_type=item_type,
+            getter_name="get_labels",
+            kind_name=f"{kind.replace('_', ' ')}",
+        )
+
+        text = self._resolve_required_schematic_text(spec, label=kind)
+        self._set_schematic_attribute(label, "text", self._create_schematic_text(text), kind)
+        self._set_schematic_attribute(
+            label,
+            "position",
+            self._required_schematic_point(schematic, spec, label=kind),
+            kind,
+        )
+
+        spin_style = self._resolve_schematic_spin_style(spec.get("spin_style"), label=kind)
+        if spin_style is not None:
+            self._set_schematic_attribute(label, "spin_style", spin_style, kind)
+
+        if kind in ("global_label", "hierarchical_label"):
+            shape = self._resolve_schematic_label_shape(spec.get("shape"), label=kind)
+            if shape is not None:
+                self._set_schematic_attribute(label, "shape", shape, kind)
+
+        locked = self._resolve_schematic_locked(spec)
+        if locked is not None:
+            self._set_schematic_attribute(label, "locked", locked, kind)
+
+        return label
+
+    def _build_schematic_text_item(self, schematic: Any, spec: dict[str, Any]) -> Any:
+        text_item = self._new_schematic_item(
+            schematic,
+            item_type=KiCadSchematicText,
+            getter_name="get_text",
+            kind_name="text item",
+        )
+
+        text = self._resolve_required_schematic_text(spec, label="text item", key="text")
+        self._set_schematic_attribute(text_item, "value", text, "text item")
+        self._set_schematic_attribute(
+            text_item,
+            "position",
+            self._required_schematic_point(schematic, spec, label="text item"),
+            "text item",
+        )
+
+        locked = self._resolve_schematic_locked(spec)
+        if locked is not None:
+            self._set_schematic_attribute(text_item, "locked", locked, "text item")
+
+        return text_item
+
+    def _build_schematic_symbol_item(self, schematic: Any, spec: dict[str, Any]) -> Any:
+        instance = self._new_schematic_item(
+            schematic,
+            item_type=KiCadSchematicSymbolInstance,
+            getter_name="get_symbols",
+            kind_name="symbol instance",
+        )
+
+        self._set_schematic_attribute(
+            instance,
+            "position",
+            self._required_schematic_point(schematic, spec, label="symbol"),
+            "symbol",
+        )
+
+        for field_name in ("reference", "value"):
+            field_value = spec.get(field_name)
+            if field_value is not None:
+                self._set_schematic_attribute(instance, field_name, str(field_value), "symbol")
+
+        unit = spec.get("unit")
+        if unit is not None:
+            self._set_schematic_attribute(instance, "unit", int(unit), "symbol")
+
+        body_style = spec.get("body_style")
+        if body_style is not None:
+            self._set_schematic_attribute(instance, "body_style", int(body_style), "symbol")
+
+        if spec.get("locked"):
+            self._set_schematic_attribute(instance, "locked", True, "symbol")
+
+        lib_id = spec.get("lib_id")
+        if lib_id is not None:
+            definition = self._create_schematic_symbol_definition(str(lib_id))
+            if definition is not None:
+                self._set_schematic_attribute(instance, "definition", definition, "symbol")
+
+        return instance
+
+    def _create_schematic_symbol_definition(self, lib_id: str) -> Any:
+        if KiCadSchematicSymbol is None or KiCadLibraryIdentifier is None:
+            return None
+        if ":" not in lib_id:
+            raise KiCadLookupError(
+                f"Symbol library identifier {lib_id!r} must use the 'library:symbol' form."
+            )
+
+        library_nickname, entry_name = lib_id.split(":", 1)
+        identifier = KiCadLibraryIdentifier()
+        self._set_schematic_attribute(identifier, "library", library_nickname, "symbol")
+        self._set_schematic_attribute(identifier, "name", entry_name, "symbol")
+
+        definition = KiCadSchematicSymbol()
+        self._set_schematic_attribute(definition, "id", identifier, "symbol")
+        return definition
+
+    def _new_schematic_item(
+        self,
+        schematic: Any,
+        *,
+        item_type: Any,
+        getter_name: str,
+        kind_name: str,
+    ) -> Any:
+        if item_type is None:
+            raise KiCadCapabilityError(
+                f"The installed kicad-python runtime does not expose a class for {kind_name} items."
+            )
+
+        try:
+            return item_type()
+        except Exception:  # noqa: BLE001 - fall back to cloning an existing item of the same type
+            pass
+
+        getter = getattr(schematic, getter_name, None)
+        if callable(getter):
+            try:
+                existing = list(getter())
+            except Exception:  # noqa: BLE001
+                existing = []
+            if existing:
+                try:
+                    return type(existing[0])()
+                except Exception as exc:  # noqa: BLE001
+                    raise KiCadCapabilityError(
+                        f"Unable to construct a new {kind_name} for the active schematic."
+                    ) from exc
+
+        raise KiCadCapabilityError(
+            f"Unable to construct a new {kind_name} for the active schematic."
+        )
+
+    def _set_schematic_attribute(self, item: Any, name: str, value: Any, label: str) -> None:
+        if value is None:
+            return
+        try:
+            setattr(item, name, value)
+        except AttributeError as exc:
+            raise KiCadCapabilityError(
+                f"The installed kicad-python runtime cannot set {name!r} on {label} items; "
+                "the KiCad version in use may not support this property."
+            ) from exc
+
+    def _create_schematic_text(self, value: str) -> Any:
+        if KiCadText is None:
+            raise KiCadCapabilityError(
+                "The installed kicad-python runtime does not expose kipy.common_types.Text."
+            )
+
+        text = KiCadText()
+        self._set_schematic_attribute(text, "value", value, "text")
+        return text
+
+    def _apply_schematic_text_field(self, item: Any, value: str) -> None:
+        """Set the text payload of a label or text item, honoring kipy's wrapper types."""
+        if KiCadSchematicText is not None and isinstance(item, KiCadSchematicText):
+            self._set_schematic_attribute(item, "value", value, "schematic item")
+            return
+
+        for label_type in (KiCadLocalLabel, KiCadGlobalLabel, KiCadHierarchicalLabel):
+            if label_type is not None and isinstance(item, label_type):
+                self._set_schematic_attribute(
+                    item, "text", self._create_schematic_text(value), "schematic item"
+                )
+                return
+
+        if hasattr(item, "value"):
+            self._set_schematic_attribute(item, "value", value, "schematic item")
+        else:
+            self._set_schematic_attribute(item, "text", value, "schematic item")
+
+    def _required_schematic_point(
+        self, schematic: Any, spec: dict[str, Any], *, label: str
+    ) -> Any:
+        x_mm = spec.get("x_mm")
+        y_mm = spec.get("y_mm")
+        if x_mm is None or y_mm is None:
+            raise KiCadLookupError(f"The {label} requires both x_mm and y_mm.")
+
+        return self._schematic_vector(
+            schematic,
+            self._millimeters_to_nanometers(float(x_mm)),
+            self._millimeters_to_nanometers(float(y_mm)),
+        )
+
+    def _point_vector(self, schematic: Any, point: dict[str, float | int]) -> Any:
+        return self._schematic_vector(schematic, int(point["x_nm"]), int(point["y_nm"]))
+
+    def _schematic_vector(self, schematic: Any, x_nm: int, y_nm: int) -> Any:
+        sample_vector = self._find_schematic_sample_vector(schematic)
+        if sample_vector is not None:
+            return self._make_vector_like(sample_vector, x_nm, y_nm)
+
+        return self._construct_vector(None, x_nm, y_nm)
+
+    def _find_schematic_sample_vector(self, schematic: Any) -> Any | None:
+        for getter_name, attribute_name in (
+            ("get_symbols", "position"),
+            ("get_junctions", "position"),
+            ("get_labels", "position"),
+            ("get_text", "position"),
+            ("get_no_connects", "position"),
+        ):
+            getter = getattr(schematic, getter_name, None)
+            if not callable(getter):
+                continue
+            try:
+                existing = list(getter())
+            except Exception:  # noqa: BLE001
+                continue
+            for item in existing:
+                vector = getattr(item, attribute_name, None)
+                if vector is not None:
+                    return vector
+
+        return None
+
+    def _resolve_required_schematic_text(
+        self, spec: dict[str, Any], *, label: str, key: str = "text"
+    ) -> str:
+        text = spec.get(key)
+        if text is None or str(text) == "":
+            raise KiCadLookupError(f"The {label} requires a non-empty {key} value.")
+        return str(text)
+
+    def _resolve_schematic_locked(self, spec: dict[str, Any]) -> bool | None:
+        if "locked" not in spec or spec.get("locked") is None:
+            return None
+        return bool(spec.get("locked"))
+
+    def _schematic_enum_value(self, enum_name: str, member_name: str, *, fallback: int) -> int:
+        proto = KiCadSchematicProto
+        if proto is None:
+            return fallback
+
+        enum_type = getattr(proto, enum_name, None)
+        member = getattr(enum_type, member_name, None) if enum_type is not None else None
+        if member is None:
+            return fallback
+
+        return int(member)
+
+    def _resolve_schematic_spin_style(self, value: Any, *, label: str) -> int | None:
+        if value is None:
+            return None
+
+        member = SCH_LABEL_SPIN_STYLE_NAMES.get(str(value).strip().lower())
+        if member is None:
+            raise KiCadLookupError(
+                f"Unsupported spin_style {value!r} for {label}. "
+                f"Supported values: {', '.join(sorted(SCH_LABEL_SPIN_STYLE_NAMES))}."
+            )
+
+        return self._schematic_enum_value(
+            "SchematicLabelSpinStyle", member, fallback=SCH_LABEL_SPIN_STYLE_FALLBACK[member]
+        )
+
+    def _resolve_schematic_label_shape(self, value: Any, *, label: str) -> int | None:
+        if value is None:
+            return None
+
+        member = SCH_LABEL_SHAPE_NAMES.get(str(value).strip().lower())
+        if member is None:
+            raise KiCadLookupError(
+                f"Unsupported shape {value!r} for {label}. "
+                f"Supported values: {', '.join(sorted(SCH_LABEL_SHAPE_NAMES))}."
+            )
+
+        return self._schematic_enum_value(
+            "SchematicLabelShape", member, fallback=SCH_LABEL_SHAPE_FALLBACK[member]
+        )
+
+    # ------------------------------------------------------------------
+    # Item update / deletion
+    # ------------------------------------------------------------------
+    def _update_schematic_items(
+        self,
+        schematic: Any,
+        *,
+        updates: Sequence[dict[str, Any]],
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        if not updates:
+            raise KiCadLookupError("At least one schematic item update is required.")
+
+        changed: list[Any] = []
+        for index, update in enumerate(updates, start=1):
+            if not isinstance(update, dict):
+                raise KiCadLookupError(f"Schematic item update {index} must be an object.")
+
+            item_id = self._extract_schematic_update_id(update, index=index)
+            item = self._resolve_schematic_items_by_ids(schematic, [item_id])[0]
+
+            applied_fields = self._apply_schematic_update(schematic, item, update)
+            if not applied_fields:
+                raise KiCadLookupError(
+                    f"Schematic item update {index} does not change any supported field. "
+                    f"Supported fields: {', '.join(SCH_UPDATABLE_FIELDS)}."
+                )
+
+            changed.append((item, applied_fields))
+
+        if not dry_run:
+            self._commit_schematic_updates(schematic, [item for item, _ in changed])
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "count": len(changed),
+            "updated": [
+                {"fields": fields, **serialize_schematic_item(item)}
+                for item, fields in changed
+            ],
+        }
+
+    def _extract_schematic_update_id(self, update: dict[str, Any], *, index: int) -> str:
+        item_id = update.get("item_id", update.get("id"))
+        if item_id is None or str(item_id) == "":
+            raise KiCadLookupError(
+                f"Schematic item update {index} requires an item_id."
+            )
+        return str(item_id)
+
+    def _apply_schematic_update(
+        self, schematic: Any, item: Any, update: dict[str, Any]
+    ) -> list[str]:
+        applied_fields: list[str] = []
+
+        position_requested = update.get("x_mm") is not None or update.get("y_mm") is not None
+        if position_requested:
+            x_mm = update.get("x_mm")
+            y_mm = update.get("y_mm")
+            if x_mm is None or y_mm is None:
+                raise KiCadLookupError(
+                    "Repositioning a schematic item requires both x_mm and y_mm."
+                )
+
+            self._set_schematic_attribute(
+                item,
+                "position",
+                self._schematic_vector(
+                    schematic,
+                    self._millimeters_to_nanometers(float(x_mm)),
+                    self._millimeters_to_nanometers(float(y_mm)),
+                ),
+                "schematic item",
+            )
+            applied_fields.extend(["x_mm", "y_mm"])
+
+        if update.get("text") is not None:
+            self._apply_schematic_text_field(item, str(update["text"]))
+            applied_fields.append("text")
+
+        for field_name in ("reference", "value"):
+            if update.get(field_name) is not None:
+                self._set_schematic_attribute(
+                    item, field_name, str(update[field_name]), "schematic item"
+                )
+                applied_fields.append(field_name)
+
+        for field_name in ("unit", "body_style"):
+            if update.get(field_name) is not None:
+                self._set_schematic_attribute(
+                    item, field_name, int(update[field_name]), "schematic item"
+                )
+                applied_fields.append(field_name)
+
+        spin_style = self._resolve_schematic_spin_style(
+            update.get("spin_style"), label="schematic item"
+        )
+        if spin_style is not None:
+            self._set_schematic_attribute(item, "spin_style", spin_style, "schematic item")
+            applied_fields.append("spin_style")
+
+        shape = self._resolve_schematic_label_shape(update.get("shape"), label="schematic item")
+        if shape is not None:
+            self._set_schematic_attribute(item, "shape", shape, "schematic item")
+            applied_fields.append("shape")
+
+        if update.get("diameter_mm") is not None:
+            self._set_schematic_attribute(
+                item,
+                "diameter",
+                self._validate_positive_measurement_mm(
+                    update["diameter_mm"], field_name="diameter_mm"
+                ),
+                "schematic item",
+            )
+            applied_fields.append("diameter_mm")
+
+        if update.get("locked") is not None:
+            self._set_schematic_attribute(item, "locked", bool(update["locked"]), "schematic item")
+            applied_fields.append("locked")
+
+        return applied_fields
+
+    def _commit_schematic_updates(self, schematic: Any, items: Sequence[Any]) -> None:
+        update_items = getattr(schematic, "update_items", None)
+        if not callable(update_items):
+            raise KiCadCapabilityError(
+                "The active KiCad schematic does not expose update_items()."
+            )
+
+        try:
+            update_items(list(items))
+        except TypeError:
+            if len(items) != 1:
+                raise
+            update_items(items[0])
+
+    def _remove_schematic_items(
+        self,
+        schematic: Any,
+        *,
+        item_ids: Sequence[str],
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        items = self._resolve_schematic_items_by_ids(schematic, item_ids)
+
+        if not dry_run:
+            remove_items = getattr(schematic, "remove_items", None)
+            if not callable(remove_items):
+                raise KiCadCapabilityError(
+                    "The active KiCad schematic does not expose remove_items()."
+                )
+            try:
+                remove_items(items)
+            except TypeError:
+                if len(items) != 1:
+                    raise
+                remove_items(items[0])
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "count": len(items),
+            "removed": [serialize_schematic_item(item) for item in items],
+        }
+
+    def _save_schematic(self, schematic: Any, dry_run: bool) -> dict[str, Any]:
+        if not dry_run:
+            save = getattr(schematic, "save", None)
+            if not callable(save):
+                raise KiCadCapabilityError("The active KiCad schematic does not expose save().")
+            save()
+
+        return {"schematic": self._serialize_schematic(schematic)}
+
+    # ------------------------------------------------------------------
+    # Additional read helpers
+    # ------------------------------------------------------------------
+    def _get_schematic_items(
+        self,
+        schematic: Any,
+        *,
+        limit: int,
+        kinds: Sequence[str] | None = None,
+    ) -> dict[str, Any]:
+        get_items = getattr(schematic, "get_items", None)
+        if not callable(get_items):
+            raise KiCadCapabilityError("The active KiCad schematic does not expose get_items().")
+
+        items = list(get_items())
+        requested_kinds = self._normalize_schematic_kind_filter(kinds)
+        selected = [
+            item
+            for item in items
+            if requested_kinds is None or self._schematic_item_kind(item) in requested_kinds
+        ]
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "total": len(items),
+            "count": min(len(selected), limit),
+            "truncated": len(selected) > limit,
+            "kinds": sorted(requested_kinds) if requested_kinds is not None else None,
+            "items": [serialize_schematic_item(item) for item in selected[:limit]],
+        }
+
+    def _get_schematic_symbols(self, schematic: Any, *, limit: int) -> dict[str, Any]:
+        symbols = self._collect_schematic_items(schematic, "get_symbols", "symbols")
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "total": len(symbols),
+            "count": min(len(symbols), limit),
+            "truncated": len(symbols) > limit,
+            "symbols": [serialize_schematic_item(symbol) for symbol in symbols[:limit]],
+        }
+
+    def _get_schematic_labels(self, schematic: Any, *, limit: int) -> dict[str, Any]:
+        labels = self._collect_schematic_items(schematic, "get_labels", "labels")
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "total": len(labels),
+            "count": min(len(labels), limit),
+            "truncated": len(labels) > limit,
+            "labels": [serialize_schematic_item(label) for label in labels[:limit]],
+        }
+
+    def _collect_schematic_items(self, schematic: Any, getter_name: str, label: str) -> list[Any]:
+        getter = getattr(schematic, getter_name, None)
+        if not callable(getter):
+            raise KiCadCapabilityError(
+                f"The active KiCad schematic does not expose {getter_name}() and cannot list "
+                f"{label}."
+            )
+        return list(getter())
+
+    def _normalize_schematic_kind_filter(
+        self, kinds: Sequence[str] | None
+    ) -> set[str] | None:
+        if not kinds:
+            return None
+
+        normalized: set[str] = set()
+        for kind in kinds:
+            value = str(kind).strip().lower()
+            if not value:
+                continue
+            if value not in SCH_CREATE_ITEM_KINDS:
+                raise KiCadLookupError(
+                    f"Unsupported schematic item kind {kind!r}. "
+                    f"Supported kinds: {', '.join(SCH_CREATE_ITEM_KINDS)}."
+                )
+            normalized.add(value)
+
+        return normalized or None
+
+    def _schematic_item_kind(self, item: Any) -> str | None:
+        for kind, item_type in SCH_CREATABLE_ITEM_TYPES.items():
+            if item_type is not None and isinstance(item, item_type):
+                return kind
+        return None
+
+    def _get_schematic_as_string(self, schematic: Any) -> dict[str, Any]:
+        get_as_string = getattr(schematic, "get_as_string", None)
+        if not callable(get_as_string):
+            raise KiCadCapabilityError(
+                "The active KiCad schematic does not expose get_as_string()."
+            )
+
+        content = get_as_string()
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "content": content,
+            "length": len(content) if isinstance(content, str) else None,
+        }
+
+    def _get_schematic_selection_as_string(self, schematic: Any) -> dict[str, Any]:
+        get_selection_as_string = getattr(schematic, "get_selection_as_string", None)
+        if not callable(get_selection_as_string):
+            raise KiCadCapabilityError(
+                "The active KiCad schematic does not expose get_selection_as_string()."
+            )
+
+        content = get_selection_as_string()
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "content": content,
+            "length": len(content) if isinstance(content, str) else None,
+        }
+
+    def _is_schematic_document_modified(self, schematic: Any) -> dict[str, Any]:
+        is_modified = getattr(schematic, "is_document_modified", None)
+        if not callable(is_modified):
+            raise KiCadCapabilityError(
+                "The active KiCad schematic does not expose is_document_modified()."
+            )
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "modified": bool(is_modified()),
+        }
+
+    # ------------------------------------------------------------------
+    # Design variants
+    # ------------------------------------------------------------------
+    def _variants_handler(self, schematic: Any) -> Any:
+        for method_name in (
+            "get_variants",
+            "add_variant",
+            "delete_variant",
+            "rename_variant",
+            "copy_variant",
+            "set_variant_description",
+            "get_current_variant",
+            "set_current_variant",
+        ):
+            if not callable(getattr(schematic, method_name, None)):
+                raise KiCadCapabilityError(
+                    "The active KiCad schematic does not expose design variant commands. "
+                    "Design variants require KiCad 11 or a KiCad build with variant IPC support."
+                )
+            return schematic
+        return schematic
+
+    def _schematic_variant_summary(self, schematic: Any) -> list[dict[str, Any]]:
+        variants = self._variants_handler(schematic).get_variants()
+        summary: list[dict[str, Any]] = []
+        for variant in variants or []:
+            summary.append(
+                {
+                    "name": getattr(variant, "name", None),
+                    "description": getattr(variant, "description", None),
+                }
+            )
+        return summary
+
+    def _get_schematic_variants(self, schematic: Any) -> dict[str, Any]:
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "count": len(self._schematic_variant_summary(schematic)),
+            "variants": self._schematic_variant_summary(schematic),
+            "current": self._variants_handler(schematic).get_current_variant(),
+        }
+
+    def _get_current_schematic_variant(self, schematic: Any) -> dict[str, Any]:
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "current": self._variants_handler(schematic).get_current_variant(),
+        }
+
+    def _add_schematic_variant(
+        self, schematic: Any, *, name: str, description: str | None, dry_run: bool
+    ) -> dict[str, Any]:
+        variant_name = self._require_variant_name(name)
+        handler = self._variants_handler(schematic)
+
+        if variant_name in {entry["name"] for entry in self._schematic_variant_summary(schematic)}:
+            raise KiCadLookupError(f"A schematic variant named {variant_name!r} already exists.")
+
+        if not dry_run:
+            handler.add_variant(variant_name, description)
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "variant": {"name": variant_name, "description": description},
+            "variants": self._schematic_variant_summary(schematic) if not dry_run else None,
+        }
+
+    def _delete_schematic_variant(
+        self, schematic: Any, *, name: str, dry_run: bool
+    ) -> dict[str, Any]:
+        variant_name = self._require_variant_name(name)
+        handler = self._variants_handler(schematic)
+
+        self._require_existing_variant(schematic, variant_name)
+
+        if not dry_run:
+            handler.delete_variant(variant_name)
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "variant": variant_name,
+            "variants": self._schematic_variant_summary(schematic) if not dry_run else None,
+        }
+
+    def _rename_schematic_variant(
+        self, schematic: Any, *, old_name: str, new_name: str, dry_run: bool
+    ) -> dict[str, Any]:
+        source_name = self._require_variant_name(old_name, field_name="old_name")
+        target_name = self._require_variant_name(new_name, field_name="new_name")
+        handler = self._variants_handler(schematic)
+
+        self._require_existing_variant(schematic, source_name, field_name="old_name")
+        if target_name in {entry["name"] for entry in self._schematic_variant_summary(schematic)}:
+            raise KiCadLookupError(f"A schematic variant named {target_name!r} already exists.")
+
+        if not dry_run:
+            handler.rename_variant(source_name, target_name)
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "renamed": {"from": source_name, "to": target_name},
+            "variants": self._schematic_variant_summary(schematic) if not dry_run else None,
+        }
+
+    def _copy_schematic_variant(
+        self,
+        schematic: Any,
+        *,
+        old_name: str,
+        new_name: str,
+        new_description: str | None,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        source_name = self._require_variant_name(old_name, field_name="old_name")
+        target_name = self._require_variant_name(new_name, field_name="new_name")
+        handler = self._variants_handler(schematic)
+
+        self._require_existing_variant(schematic, source_name, field_name="old_name")
+        if target_name in {entry["name"] for entry in self._schematic_variant_summary(schematic)}:
+            raise KiCadLookupError(f"A schematic variant named {target_name!r} already exists.")
+
+        if not dry_run:
+            handler.copy_variant(source_name, target_name, new_description)
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "copied": {"from": source_name, "to": target_name},
+            "new_description": new_description,
+            "variants": self._schematic_variant_summary(schematic) if not dry_run else None,
+        }
+
+    def _set_schematic_variant_description(
+        self, schematic: Any, *, name: str, description: str, dry_run: bool
+    ) -> dict[str, Any]:
+        variant_name = self._require_variant_name(name)
+        handler = self._variants_handler(schematic)
+
+        previous = self._require_existing_variant(schematic, variant_name)
+
+        if not dry_run:
+            handler.set_variant_description(variant_name, description)
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "variant": variant_name,
+            "previous_description": previous,
+            "description": description,
+        }
+
+    def _set_current_schematic_variant(
+        self, schematic: Any, *, name: str | None, dry_run: bool
+    ) -> dict[str, Any]:
+        handler = self._variants_handler(schematic)
+
+        # KiCad treats an empty variant name as "back to the default variant", so accept
+        # both an omitted name and an explicitly empty string.
+        variant_name: str | None = None
+        if name is not None and str(name).strip() != "":
+            variant_name = self._require_variant_name(name)
+            self._require_existing_variant(schematic, variant_name)
+
+        if not dry_run:
+            handler.set_current_variant(variant_name)
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "current": variant_name,
+        }
+
+    def _require_variant_name(self, name: Any, *, field_name: str = "name") -> str:
+        if name is None or str(name).strip() == "":
+            raise KiCadLookupError(f"A non-empty {field_name} is required for variant commands.")
+        return str(name).strip()
+
+    def _require_existing_variant(
+        self, schematic: Any, name: str, *, field_name: str = "name"
+    ) -> Any:
+        for entry in self._schematic_variant_summary(schematic):
+            if entry["name"] == name:
+                return entry.get("description")
+
+        known = sorted(
+            entry["name"] for entry in self._schematic_variant_summary(schematic) if entry["name"]
+        )
+        raise KiCadLookupError(
+            f"No schematic variant named {name!r} exists ({field_name}). "
+            f"Known variants: {', '.join(known) if known else 'none'}."
+        )
+
     def _serialize_schematic(self, schematic: Any) -> dict[str, Any]:
         return {
             "name": getattr(schematic, "name", None),
@@ -1035,7 +2436,8 @@ class KiCadSchematicClientMixin:
         except ModuleNotFoundError as exc:
             raise KiCadCapabilityError(
                 "The installed kicad-python runtime does not expose kipy.proto.common.types.KIID. "
-                "Schematic hit-test MCP tools require a newer binding build with schematic item lookup support."
+                "Schematic hit-test MCP tools require a newer binding build with schematic "
+                "item lookup support."
             ) from exc
 
         lookup_ids = []

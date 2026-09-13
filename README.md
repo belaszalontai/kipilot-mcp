@@ -70,14 +70,29 @@ Important export semantics:
 - `kicad_sch_export_pdf` takes `output_file` because KiCad writes one PDF file to a file path.
 - `kicad_sch_export_netlist` and `kicad_sch_export_bom` also take `output_file` because they produce single file outputs.
 - When you want a full schematic export, `plot_all=true` with omitted `plot_pages` is the safest default unless you already know the exact sheet-instance paths to filter.
-- In this environment, live end-to-end schematic MCP validation succeeded against a locally built `kicad-master` `eeschema` snapshot. The installed official KiCad 10.0.1 build did not expose the same reliable external schematic IPC behavior, so treat the schematic surface as source-build-gated rather than universally available across all KiCad 10 installations.
+- In this environment, live end-to-end schematic MCP validation succeeded against a locally built `kicad-master` `eeschema` snapshot. The installed official KiCad 10.0.1 build did not expose the same reliable external schematic IPC behavior, so treat the schematic surface as source-build-gated rather than universally available across all KiCad 10 installations. Upstream KiCad 10.0.x registers only `GetOpenDocuments` on the schematic API handler, which is why the schematic tools need a KiCad 11 (master/nightly) build.
 
 ## Requirements
 
-- KiCad 10.x installed locally
+- KiCad 10.x installed locally for the PCB surface
+- A KiCad 11 build (master/nightly) for the schematic surface — see below
 - A running KiCad GUI instance with IPC API support
 - Python 3.11+ for source installs and local ZIP builds
 - Git for source installs
+
+The supported KiCad version depends on the tool family you use:
+
+- PCB tools run against the stable KiCad 10.x series (10.0.6 or later recommended).
+- Schematic tools require a KiCad build that implements the schematic IPC handlers. Upstream KiCad 10.0.x
+  registers only `GetOpenDocuments` on the schematic API handler, so schematic tools fail there with a
+  capability error. The full schematic surface (item reads and writes, selection, page settings, title block,
+  exports, and design variants) is implemented on the KiCad master branch, which is the KiCad 11 development
+  line. KiCad 11.0.0 has no announced release date yet.
+- The Python wrapper side is already available in source form: `kicad-python` from the upstream `main` branch
+  (version `0.9.0.dev0`) and later. The 0.9.0 release is not on PyPI yet, so packaging that needs the schematic
+  client bindings must vendor or pin the wrapper rather than rely on `pip install kicad-python`.
+- The Windows ZIP release bundles both the Python runtime and the `kicad-python` binding, so no separate wrapper
+  installation is needed when you install from the downloadable Windows artifact.
 
 Use a stable CPython release such as 3.11, 3.12, or 3.13. Avoid preview or alpha Python interpreters because the native dependency chain may not publish wheels for them yet.
 

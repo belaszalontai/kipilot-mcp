@@ -407,6 +407,269 @@ async def kicad_sch_clear_selection(dry_run: bool = False) -> dict[str, Any]:
 
 
 @mcp.tool()
+async def kicad_sch_create_items(
+    items: list[dict[str, Any]],
+    dry_run: bool = False,
+    commit_message: str | None = None,
+) -> dict[str, Any]:
+    """Create schematic items (wires, buses, junctions, labels, text, symbols).
+
+    Each entry of ``items`` is an object with a ``kind`` plus geometry. Wires and buses
+    accept a ``points`` polyline of ``{"x_mm": ..., "y_mm": ...}`` vertices and are split
+    into one segment per consecutive pair. Supported kinds:
+    ``wire``, ``bus`` (``points``), ``junction`` (``x_mm``, ``y_mm``, ``diameter_mm``),
+    ``no_connect`` (``x_mm``, ``y_mm``), ``label``, ``global_label``, ``hierarchical_label``
+    (``text``, ``x_mm``, ``y_mm``, ``spin_style``, ``shape``), ``text`` (``text``, ``x_mm``,
+    ``y_mm``) and ``symbol`` (``x_mm``, ``y_mm``, ``lib_id``, ``reference``, ``value``,
+    ``unit``, ``body_style``). Geometry is in millimeters.
+    """
+
+    return await _run_client_tool(
+        "kicad_sch_create_items",
+        "create_schematic_items",
+        items=items,
+        dry_run=dry_run,
+        commit_message=commit_message,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_update_items(
+    updates: list[dict[str, Any]],
+    dry_run: bool = False,
+    commit_message: str | None = None,
+) -> dict[str, Any]:
+    """Update existing schematic items by ID.
+
+    Each entry requires an ``item_id`` and at least one supported field: ``x_mm``/``y_mm``
+    (move, both required), ``text``, ``reference``, ``value``, ``unit``, ``spin_style``,
+    ``shape``, ``diameter_mm`` or ``locked``. Geometry is in millimeters.
+    """
+
+    return await _run_client_tool(
+        "kicad_sch_update_items",
+        "update_schematic_items",
+        updates=updates,
+        dry_run=dry_run,
+        commit_message=commit_message,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_remove_items(
+    item_ids: list[str],
+    dry_run: bool = False,
+    commit_message: str | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Delete one or more schematic items by ID. This is a destructive operation."""
+
+    return await _run_client_tool(
+        "kicad_sch_remove_items",
+        "remove_schematic_items",
+        item_ids=item_ids,
+        dry_run=dry_run,
+        commit_message=commit_message,
+        force=force,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_save(dry_run: bool = False) -> dict[str, Any]:
+    """Save the current schematic document to disk."""
+
+    return await _run_client_tool(
+        "kicad_sch_save",
+        "save_schematic",
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_get_items(
+    limit: int = 200,
+    kinds: list[str] | None = None,
+) -> dict[str, Any]:
+    """List schematic items, optionally filtered by kind (wire, bus, junction, label, ...)."""
+
+    return await _run_client_tool(
+        "kicad_sch_get_items",
+        "get_schematic_items",
+        limit=limit,
+        kinds=kinds,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_get_symbols(limit: int = 200) -> dict[str, Any]:
+    """List symbol instances placed on the current schematic sheet."""
+
+    return await _run_client_tool(
+        "kicad_sch_get_symbols",
+        "get_schematic_symbols",
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_get_labels(limit: int = 200) -> dict[str, Any]:
+    """List local, global and hierarchical labels on the current schematic sheet."""
+
+    return await _run_client_tool(
+        "kicad_sch_get_labels",
+        "get_schematic_labels",
+        limit=limit,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_get_as_string() -> dict[str, Any]:
+    """Return the current schematic serialized as KiCad s-expression text."""
+
+    return await _run_client_tool(
+        "kicad_sch_get_as_string",
+        "get_schematic_as_string",
+    )
+
+
+@mcp.tool()
+async def kicad_sch_get_selection_as_string() -> dict[str, Any]:
+    """Return the current schematic selection serialized as KiCad s-expression text."""
+
+    return await _run_client_tool(
+        "kicad_sch_get_selection_as_string",
+        "get_schematic_selection_as_string",
+    )
+
+
+@mcp.tool()
+async def kicad_sch_is_document_modified() -> dict[str, Any]:
+    """Report whether the schematic document has unsaved modifications."""
+
+    return await _run_client_tool(
+        "kicad_sch_is_document_modified",
+        "is_schematic_document_modified",
+    )
+
+
+@mcp.tool()
+async def kicad_sch_get_variants() -> dict[str, Any]:
+    """List the design variants defined on the current schematic and the active one."""
+
+    return await _run_client_tool(
+        "kicad_sch_get_variants",
+        "get_schematic_variants",
+    )
+
+
+@mcp.tool()
+async def kicad_sch_get_current_variant() -> dict[str, Any]:
+    """Return the name of the active design variant of the current schematic."""
+
+    return await _run_client_tool(
+        "kicad_sch_get_current_variant",
+        "get_current_schematic_variant",
+    )
+
+
+@mcp.tool()
+async def kicad_sch_add_variant(
+    name: str,
+    description: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Add a new design variant to the current schematic."""
+
+    return await _run_client_tool(
+        "kicad_sch_add_variant",
+        "add_schematic_variant",
+        name=name,
+        description=description,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_delete_variant(name: str, dry_run: bool = False) -> dict[str, Any]:
+    """Delete a design variant from the current schematic. This is a destructive operation."""
+
+    return await _run_client_tool(
+        "kicad_sch_delete_variant",
+        "delete_schematic_variant",
+        name=name,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_rename_variant(
+    old_name: str,
+    new_name: str,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Rename an existing design variant of the current schematic."""
+
+    return await _run_client_tool(
+        "kicad_sch_rename_variant",
+        "rename_schematic_variant",
+        old_name=old_name,
+        new_name=new_name,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_copy_variant(
+    old_name: str,
+    new_name: str,
+    new_description: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Copy an existing design variant of the current schematic under a new name."""
+
+    return await _run_client_tool(
+        "kicad_sch_copy_variant",
+        "copy_schematic_variant",
+        old_name=old_name,
+        new_name=new_name,
+        new_description=new_description,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_set_variant_description(
+    name: str,
+    description: str,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Set the description of an existing design variant of the current schematic."""
+
+    return await _run_client_tool(
+        "kicad_sch_set_variant_description",
+        "set_schematic_variant_description",
+        name=name,
+        description=description,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_set_current_variant(
+    name: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Activate a design variant, or the default variant when name is omitted or empty."""
+
+    return await _run_client_tool(
+        "kicad_sch_set_current_variant",
+        "set_current_schematic_variant",
+        name=name,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
 async def kicad_get_board_outline() -> dict[str, Any]:
     """Return Edge.Cuts-derived board outline shapes for the current PCB."""
 

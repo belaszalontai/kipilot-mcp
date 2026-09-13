@@ -138,6 +138,18 @@ def serialize_board_plot_settings(plot_settings: Any) -> dict[str, Any] | None:
     }
 
 
+def normalize_schematic_text(value: Any) -> Any:
+    """Unwrap kipy text wrappers (``kipy.common_types.Text``) to a plain string."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+
+    inner_value = getattr(value, "value", None)
+    if isinstance(inner_value, str):
+        return inner_value
+
+    return value
+
+
 def serialize_schematic_item(item: Any) -> dict[str, Any] | None:
     """Serialize one schematic item to a compact MCP-friendly representation."""
     if item is None:
@@ -148,7 +160,7 @@ def serialize_schematic_item(item: Any) -> dict[str, Any] | None:
         "type": getattr(item, "type", None),
         "reference": getattr(item, "reference", None),
         "value": getattr(item, "value", None),
-        "text": getattr(item, "text", None),
+        "text": normalize_schematic_text(getattr(item, "text", None)),
         "position": serialize_vector(getattr(item, "position", None)),
     }
 
