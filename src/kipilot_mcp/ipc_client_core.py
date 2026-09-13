@@ -138,6 +138,7 @@ try:
     from kipy.board_types import Track as KiCadTrack  # type: ignore[import-not-found]
     from kipy.board_types import Via as KiCadVia  # type: ignore[import-not-found]
     from kipy.errors import ApiError  # type: ignore[import-not-found]
+    from kipy.errors import FutureVersionError as KiCadFutureVersionError  # type: ignore[import-not-found]
     from kipy.geometry import (
         PolygonWithHoles as KiCadPolygonWithHoles,
     )  # type: ignore[import-not-found]
@@ -158,6 +159,9 @@ except ModuleNotFoundError as exc:  # pragma: no cover - depends on local enviro
 
     class ApiError(RuntimeError):
         """Fallback API error used when kicad-python is unavailable."""
+
+    class KiCadFutureVersionError(RuntimeError):
+        """Fallback version error used when kicad-python is unavailable."""
 
     _KIPY_IMPORT_ERROR = exc
 else:
@@ -927,7 +931,14 @@ class KiCadIpcClientCore:
 
         check_version = getattr(kicad, "check_version", None)
         if callable(check_version):
-            result["api_version_matches_binding"] = bool(check_version())
+            try:
+                result["api_version_matches_binding"] = bool(check_version())
+            except KiCadFutureVersionError as exc:
+                # The connected KiCad is newer than the release kicad-python was built
+                # against. Ping and GetVersion already succeeded, so the transport is
+                # healthy: report the mismatch as a warning instead of failing the probe.
+                result["api_version_matches_binding"] = False
+                result["version_warning"] = str(exc)
 
         return result
 

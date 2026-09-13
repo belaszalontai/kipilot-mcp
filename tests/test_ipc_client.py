@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from kipilot_mcp.config import KiCadIpcConfig
 from kipilot_mcp.ipc_client import ApiError, KiCadIpcClient
+from kipilot_mcp.ipc_client_core import KiCadFutureVersionError
 
 
 async def test_check_connection_uses_kicad_python_factory() -> None:
@@ -55,6 +56,50 @@ async def test_check_connection_uses_kicad_python_factory() -> None:
         },
         "ping": True,
         "closed": True,
+    }
+
+
+async def test_check_connection_tolerates_newer_kicad_than_binding() -> None:
+    """A newer KiCad than the binding was built against must not fail the probe."""
+
+    class FutureVersionKiCad:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def ping(self) -> None:
+            pass
+
+        def get_version(self) -> str:
+            return "11.0.0"
+
+        def get_api_version(self) -> str:
+            return "10.0.1"
+
+        def check_version(self) -> bool:
+            raise KiCadFutureVersionError(
+                "Warning: Connected KiCad version (11.0.0) is newer than "
+                "the API version of kicad-python (10.0.1)"
+            )
+
+        def close(self) -> None:
+            pass
+
+    client = KiCadIpcClient(KiCadIpcConfig(), kicad_factory=FutureVersionKiCad)
+
+    result = await client.check_connection()
+
+    assert result == {
+        "ok": True,
+        "socket_path": None,
+        "client_name": "kipilot-mcp",
+        "kicad_version": "11.0.0",
+        "api_version": "10.0.1",
+        "api_version_matches_binding": False,
+        "version_warning": (
+            "Warning: Connected KiCad version (11.0.0) is newer than "
+            "the API version of kicad-python (10.0.1)"
+        ),
+        "message": "KiCad IPC endpoint is reachable.",
     }
 
 
