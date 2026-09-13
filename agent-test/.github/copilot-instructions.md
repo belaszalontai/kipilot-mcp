@@ -7,6 +7,7 @@ This workspace is a dedicated test harness for using the sibling `kipilot-mcp` s
 ## Workflow Expectations
 
 - Use the configured `kipilot-mcp` MCP server for every substantive KiCad answer in this workspace.
+- In chat always use English for any output.
 - Treat this workspace as current-document-first: interpret user requests as referring to the live board or the live schematic unless the user explicitly asks to debug the MCP setup itself.
 - When a schematic document is open in a KiCad 11 (master/nightly) build, treat the `kicad_sch_*` tools as the source of truth for schematic answers, with the same MCP-first discipline that applies to board work.
 - For KiCad inspection, explanation, and mutation tasks in this workspace, use only `kipilot-mcp` MCP tools as the source of truth.
