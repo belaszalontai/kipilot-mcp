@@ -5,14 +5,17 @@ This folder is a small standalone VS Code test workspace for running a custom Co
 Open this `agent-test` folder in a separate VS Code window if you want a clean workspace that contains:
 
 - a ready-to-use workspace MCP configuration
-- a dedicated KiCad hardware agent
+- a dedicated KiCad hardware agent that works on both the board and the schematic
 - project-level Copilot instructions for KiCad MCP usage
+- a ready-to-run schematic showcase prompt
 
 ## What Is Included
 
 - `.vscode/mcp.json`: VS Code MCP server configuration for the sibling KiPilot server
 - `.github/copilot-instructions.md`: always-on workspace instructions for this mini test project
-- `.github/agents/kicad-agent.agent.md`: the custom electronics/KiCad agent definition
+- `.github/agents/kicad-agent.agent.md`: the custom electronics/KiCad agent definition, covering board and schematic work
+- `.github/prompts/schematic-showcase.prompt.md`: the `/schematic-showcase` schematic showcase prompt
+- `.logs/` and `out/`: server log and export targets created at runtime
 
 ## Recommended Versions
 
@@ -23,9 +26,10 @@ Use the versions below for the smoothest setup on Windows:
 | Windows | Windows 10 or Windows 11 | This test harness is Windows-oriented because its MCP config points at a Windows virtual environment path |
 | Python | Stable CPython 3.11, 3.12, or 3.13 x64 | Avoid preview or alpha interpreters |
 | Supported Python range | 3.11+ | Declared by the project |
-| KiCad | 10.x | Current KiPilot baseline is KiCad 10 PCB-first |
-| `kicad-python` | `>=0.7.1` | Runtime dependency |
-| `mcp` | `>=1.8.0` | Runtime dependency |
+| KiCad | 10.x | Board tools run against the stable 10.x series (10.0.6 or later recommended) |
+| KiCad (schematic) | 11.0 master/nightly | The schematic surface needs a build that implements the schematic IPC handlers. Upstream 10.0.x only answers open-document queries there |
+| `kicad-python` | `>=0.7.1` | Runtime dependency. The schematic client bindings live in `0.9.0.dev0` on upstream `main`, and the Windows ZIP bundles them |
+| `mcp` | `>=1.8.0,<2` | Runtime dependency |
 | `pytest` | `>=8.3.0` | Optional, only for local test/development work |
 | `pytest-asyncio` | `>=0.24.0` | Optional, only for local test/development work |
 | `ruff` | `>=0.8.0` | Optional, only for local lint/development work |
@@ -37,7 +41,7 @@ Install the following before using this workspace:
 
 1. Git
 2. A stable Python 3.11+ x64 release from python.org
-3. KiCad 10.x
+3. KiCad 10.0.6 or later for board work, plus a KiCad 11 (master/nightly) build if you want the schematic tools
 4. Microsoft Visual C++ Redistributable 2015-2022 x64
 5. VS Code with GitHub Copilot / Copilot Chat and MCP support enabled
 
@@ -67,7 +71,7 @@ What the runtime setup installs into the parent `.venv`:
 - `kipilot-mcp` in editable mode
 - runtime dependencies:
   - `kicad-python>=0.7.1`
-  - `mcp>=1.8.0`
+  - `mcp>=1.8.0,<2`
 - optional development dependencies when you run the editable development install:
   - `pytest>=8.3.0`
   - `pytest-asyncio>=0.24.0`
@@ -77,9 +81,9 @@ What the runtime setup installs into the parent `.venv`:
 
 Before you start the MCP server, prepare KiCad:
 
-1. Start KiCad 10.x.
+1. Start KiCad 10.x for board work, or your KiCad 11 (master/nightly) build for schematic work.
 2. Open the target hardware project.
-3. Open the PCB Editor, not only the project manager window.
+3. Open the editor whose document you want to drive: the PCB Editor, the Schematic Editor, or both. The project manager window on its own is not enough.
 4. If needed in your KiCad build, enable the API under `Preferences -> Plugins -> Enable KiCad API`.
 5. During setup, prefer having only one KiCad instance open.
 
@@ -104,9 +108,9 @@ It is configured to start the sibling KiPilot server with:
 - timeout: `60000 ms`
 - log level: `INFO`
 - log file: `.logs/kipilot-agent-test.log`
-- mutations: disabled by default
+- mutations: enabled in this workspace (`KIPILOT_ENABLE_MUTATIONS=1`)
 
-The parent `.venv` path is an intentional test-workspace convention so the checked-in MCP configuration can point at a predictable interpreter. It is not a general KiPilot requirement. This workspace is safe by default for exploration and dry-run previews.
+The parent `.venv` path is an intentional test-workspace convention so the checked-in MCP configuration can point at a predictable interpreter. It is not a general KiPilot requirement. This workspace has live writes enabled on purpose, so mutation tools take effect immediately; pass `dry_run=true` when you only want a preview.
 
 ## How To Start The MCP Server In VS Code
 
@@ -142,7 +146,7 @@ Once the workspace is open:
 Run ping_kicad and tell me whether KiCad is reachable.
 ```
 
-4. Then continue with board-aware prompts, for example:
+4. Then continue with board prompts, for example:
 
 ```text
 Summarize the currently open PCB and list the first ten footprints.
@@ -156,28 +160,78 @@ Find footprint R1 and preview moving it to x=42.0 mm, y=18.5 mm.
 Use the KiCad MCP tools to find the footprint whose value is LOGO. Report which copper side it is currently on, then flip it to the opposite side. After the operation, verify that the footprint side changed and that any child artwork moved onto the mirrored side-specific silkscreen layer. If live writes are disabled, do the same flow as a dry run and say that explicitly.
 ```
 
-## Default Safety Behavior
+5. For schematic work on a KiCad 11 build, use prompts such as:
 
-This test workspace is intentionally conservative:
-
-- `KIPILOT_ENABLE_MUTATIONS=0` in `.vscode/mcp.json`
-- read tools work normally
-- mutation tools work only in `dry_run=true` mode unless you explicitly enable live writes
-- destructive tools such as board revert or item deletion still require explicit force guards
-
-If you want to allow live board mutations in this test workspace, edit `.vscode/mcp.json` and change:
-
-```json
-"KIPILOT_ENABLE_MUTATIONS": "0"
+```text
+Summarize the currently open schematic: title block, page settings, hierarchy, symbol count, and the number of nets in the netlist.
 ```
 
-to:
+```text
+Draw a documented test-point block in a free area of this sheet with wires, a junction, a no-connect marker, a local label, a global label, and two text items. Show the dry run first, then apply it and highlight the created items.
+```
+
+```text
+Create a DNP design variant, describe it, switch to it, and export the BOM for that variant.
+```
+
+## Schematic Showcase On KiCad 11
+
+The schematic surface shipped in KiPilot MCP v0.2.0 needs a KiCad build that implements the schematic IPC handlers. Upstream KiCad 10.0.x registers only `GetOpenDocuments` on the schematic API handler, so use a KiCad 11 (master/nightly) build for schematic work.
+
+This workspace contains a ready-to-run showcase for that surface:
+
+| File | Purpose |
+| --- | --- |
+| `.github/agents/kicad-agent.agent.md` | Shared KiCad agent for board and schematic work; the showcase prompt drives the schematic flow |
+| `.github/prompts/schematic-showcase.prompt.md` | End-to-end showcase prompt, invoked as `/schematic-showcase` |
+| `out/sch-demo/` | Export target for the SVG, PDF, netlist, and BOM produced by the showcase |
+
+### Prerequisite: Build And Run KiCad 11
+
+Build the schematic editor. The `eeschema` target also builds the `eeschema_kiface` module that carries the schematic IPC handler:
+
+```bash
+cmake --build <build-dir> --target eeschema --parallel
+cmake --build <build-dir> --target bitmap_archive_build api_schema_build_copy --parallel
+```
+
+Then start `eeschema.exe` from the `<build-dir>/eeschema` directory with `KICAD_RUN_FROM_BUILD_DIR=1` and the build subdirectories on `PATH`, open a project in the Schematic Editor, and enable the API if your build requires it.
+
+### Running The Showcase
+
+1. Open this `agent-test` folder as the workspace root.
+2. Make sure the `kipilot-mcp` MCP server shows as connected.
+3. Open the schematic you want to record in KiCad.
+4. In Copilot Chat, select the `kicad-agent` agent.
+5. Run `/schematic-showcase`.
+
+The showcase reads the live sheet, stamps the title block, draws an annotated functional block with wires, a junction, a no-connect marker, labels, and text, highlights the new objects through the selection API, edits and hit-tests an item, proves that the netlist changed, manages design variants, exports an SVG/PDF/netlist/BOM pack into `out/sch-demo`, and saves the document.
+
+Run it against a copy of a project rather than work you care about: `KIPILOT_ENABLE_MUTATIONS=1` in `.vscode/mcp.json` makes the drawing, variant, and save steps real writes.
+
+## Default Safety Behavior
+
+This test workspace currently ships with live writes enabled:
+
+- `KIPILOT_ENABLE_MUTATIONS=1` in `.vscode/mcp.json`
+- read tools work normally
+- mutation tools apply immediately unless you pass `dry_run=true` yourself
+- destructive tools such as board revert, item deletion, and variant deletion still require explicit force guards
+- schematic mutations only land when the connected KiCad build supports the schematic IPC handlers
+
+To go back to the conservative default, edit `.vscode/mcp.json` and change:
 
 ```json
 "KIPILOT_ENABLE_MUTATIONS": "1"
 ```
 
-Do that only when you are ready for real writes to the currently open board.
+to:
+
+```json
+"KIPILOT_ENABLE_MUTATIONS": "0"
+```
+
+Do that when you want exploration and dry-run previews only.
 
 ## Logs
 
@@ -192,7 +246,7 @@ It also logs to `stderr`, which is useful when you manually run the server proce
 ### `ping_kicad` fails
 
 - Make sure KiCad is already running.
-- Make sure the PCB Editor is open.
+- Make sure at least one editor is open: the PCB Editor, the Schematic Editor, or both.
 - Confirm that the parent `.venv` exists and the editable install completed successfully.
 
 ### The MCP server does not start in VS Code
@@ -213,6 +267,12 @@ It also logs to `stderr`, which is useful when you manually run the server proce
 - Open the PCB Editor and retry.
 - If your KiCad installation requires explicit endpoint variables, add `KICAD_API_SOCKET` and `KICAD_API_TOKEN` into `.vscode/mcp.json`.
 
+### Schematic tools fail with a capability error
+
+- The connected KiCad build does not implement the schematic IPC handlers. Upstream KiCad 10.0.x answers only `GetOpenDocuments` on the schematic API handler, so every other schematic call fails there.
+- Start a KiCad 11 (master/nightly) build instead, open the Schematic Editor, and retry.
+- See `Schematic Showcase On KiCad 11` above for the build and run steps.
+
 ## Suggested First Test Prompt
 
 ```text
@@ -223,4 +283,10 @@ Use the KiCad MCP tools to verify the connection, report the KiCad version, then
 
 ```text
 Use the KiCad MCP tools to find the footprint whose value is LOGO. Explain whether it is currently on F.Cu or B.Cu, then flip it to the opposite copper side. After the tool call, verify the resulting footprint layer and confirm that the footprint-internal artwork moved to the mirrored side-specific silkscreen layer. If live writes are disabled, run the same test as a dry run and call that out explicitly.
+```
+
+## Suggested Schematic Test Prompt
+
+```text
+Use the KiCad MCP tools to verify the connection, report the KiCad version, then summarize the open schematic: hierarchy, title block, page settings, symbol count, and netlist size. Stay read-only, and call out explicitly when a step would normally be a write.
 ```

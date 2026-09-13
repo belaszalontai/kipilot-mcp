@@ -7,7 +7,8 @@ This workspace is a dedicated test harness for using the sibling `kipilot-mcp` s
 ## Workflow Expectations
 
 - Use the configured `kipilot-mcp` MCP server for every substantive KiCad answer in this workspace.
-- Treat this workspace as current-board-first: interpret user requests as referring to the live board unless the user explicitly asks to debug the MCP setup itself.
+- Treat this workspace as current-document-first: interpret user requests as referring to the live board or the live schematic unless the user explicitly asks to debug the MCP setup itself.
+- When a schematic document is open in a KiCad 11 (master/nightly) build, treat the `kicad_sch_*` tools as the source of truth for schematic answers, with the same MCP-first discipline that applies to board work.
 - For KiCad inspection, explanation, and mutation tasks in this workspace, use only `kipilot-mcp` MCP tools as the source of truth.
 - Before any board-specific reasoning, verify that the `kipilot-mcp` MCP tools are actually available in the session. If the tool namespace is missing, treat that as an MCP server startup/configuration problem, not as a signal to search the repository for board state.
 - Verify connectivity with `ping_kicad` or `get_kicad_version` before substantive board actions when session state is unknown.
@@ -32,8 +33,10 @@ This workspace is a dedicated test harness for using the sibling `kipilot-mcp` s
 
 ## Scope Limits
 
-- Treat this workspace as KiCad 10 PCB-first.
-- Do not assume schematic automation, plotting, export automation, or headless KiCad control are available.
+- Treat PCB work in this workspace as KiCad 10 PCB-first.
+- The schematic surface (`kicad_sch_*`) is available when KiCad 11 (master/nightly) is running with the IPC API enabled. On upstream KiCad 10.0.x the schematic handler only exposes open-document queries, so schematic calls fail with a capability error; report that limitation instead of working around it.
+- Schematic creation, editing, selection, variant, and export tools follow the same dry-run-first and `ok: true` evidence rules as board mutations.
+- Do not assume headless KiCad control is available.
 - If the requested action is outside the current MCP surface, say that clearly and offer a PCB-scoped alternative.
 - Do not use repository reads, workspace file inspection, terminal parsing, or chat-session artifact inspection as a substitute for live board-state MCP queries.
 - If the requested action is outside the current MCP surface, do not compensate by mining chat-session files or terminal output; report the limitation plainly.
