@@ -2,7 +2,73 @@
 
 from __future__ import annotations
 
+import base64
+
 from .ipc_client_core import *  # noqa: F401,F403
+from .ipc_client_core import _parse_dict  # noqa: F401
+
+try:
+    from kipy.board_jobs import (
+        Export3DSettings as KiCadExport3DSettings,
+    )  # type: ignore[import-not-found]
+    from kipy.board_jobs import (
+        Ipc2581ExportSettings as KiCadIpc2581ExportSettings,
+    )  # type: ignore[import-not-found]
+    from kipy.board_jobs import (
+        PlotSettings as KiCadBoardPlotSettings,
+    )  # type: ignore[import-not-found]
+    from kipy.board_jobs import (
+        PositionExportSettings as KiCadPositionExportSettings,
+    )  # type: ignore[import-not-found]
+    from kipy.board_jobs import (
+        RenderSettings as KiCadRenderSettings,
+    )  # type: ignore[import-not-found]
+    from kipy.board_rules import BoardDesignRules as KiCadBoardDesignRules  # type: ignore[import-not-found]
+    from kipy.board_rules import CustomRule as KiCadCustomRule  # type: ignore[import-not-found]
+    from kipy.common_types import EmbeddedFile as KiCadEmbeddedFile  # type: ignore[import-not-found]
+    from kipy.proto.board import (  # type: ignore[import-not-found]
+        board_commands_pb2 as KiCadBoardCommandsProto,
+    )
+    from kipy.proto.board import (  # type: ignore[import-not-found]
+        board_jobs_pb2 as KiCadBoardJobsProto,
+    )
+    from kipy.proto.board import (  # type: ignore[import-not-found]
+        board_rules_pb2 as KiCadBoardRulesProto,
+    )
+    from kipy.proto.common.types import enums_pb2 as KiCadCommonEnumsProto  # type: ignore[import-not-found]
+except ModuleNotFoundError:  # pragma: no cover - depends on local environment
+    KiCadExport3DSettings = None
+    KiCadIpc2581ExportSettings = None
+    KiCadBoardPlotSettings = None
+    KiCadPositionExportSettings = None
+    KiCadRenderSettings = None
+    KiCadBoardDesignRules = None
+    KiCadCustomRule = None
+    KiCadEmbeddedFile = None
+    KiCadBoardCommandsProto = None
+    KiCadBoardJobsProto = None
+    KiCadBoardRulesProto = None
+    KiCadCommonEnumsProto = None
+
+BOARD_JOB_SETTINGS_TYPES = {
+    "3d": KiCadExport3DSettings,
+    "render": KiCadRenderSettings,
+    "position": KiCadPositionExportSettings,
+    "ipc2581": KiCadIpc2581ExportSettings,
+}
+EMBEDDED_FILE_TYPE_NAMES = {
+    "other": 1,
+    "font": 2,
+    "model": 3,
+    "worksheet": 4,
+    "datasheet": 5,
+}
+NETLIST_MATCH_MODE_NAMES = {
+    "uuid": "NMM_UUID",
+    "reference": "NMM_REFERENCE",
+    "ref": "NMM_REFERENCE",
+}
+
 
 
 class KiCadPcbClientMixin:
@@ -401,6 +467,1249 @@ class KiCadPcbClientMixin:
             self._get_board_outline,
             default_message="Unable to derive the board outline through the IPC API.",
         )
+
+    # ------------------------------------------------------------------
+    # Board export jobs (v0.3.0)
+    # ------------------------------------------------------------------
+    async def export_board_svg(
+        self,
+        output_dir: str,
+        *,
+        fit_page_to_board: bool = False,
+        precision: int = 4,
+        plot_settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Export the current board to SVG files inside output_dir."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_svg",
+                format_name="svg",
+                output_path=output_dir,
+                output_kind="directory",
+                path_argument_name="output_dir",
+                plot_settings=plot_settings,
+                fit_page_to_board=bool(fit_page_to_board),
+                precision=int(precision),
+            ),
+            default_message="Unable to export the current board to SVG through the IPC API.",
+        )
+
+    async def export_board_dxf(
+        self,
+        output_dir: str,
+        *,
+        plot_graphic_items_using_contours: bool = False,
+        polygon_mode: bool = False,
+        units: int | str | None = None,
+        plot_settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Export the current board to DXF files inside output_dir."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_dxf",
+                format_name="dxf",
+                output_path=output_dir,
+                output_kind="directory",
+                path_argument_name="output_dir",
+                plot_settings=plot_settings,
+                plot_graphic_items_using_contours=bool(plot_graphic_items_using_contours),
+                polygon_mode=bool(polygon_mode),
+                units=self._resolve_proto_enum(
+                    units,
+                    self._common_enum("Units"),
+                    label="units",
+                    default_name="U_MM",
+                ),
+            ),
+            default_message="Unable to export the current board to DXF through the IPC API.",
+        )
+
+    async def export_board_pdf(
+        self,
+        output_file: str,
+        *,
+        include_metadata: bool = True,
+        single_document: bool = True,
+        background_color: str = "",
+        front_footprint_property_popups: bool = False,
+        back_footprint_property_popups: bool = False,
+        plot_settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Export the current board to one PDF file."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_pdf",
+                format_name="pdf",
+                output_path=output_file,
+                output_kind="file",
+                path_argument_name="output_file",
+                plot_settings=plot_settings,
+                include_metadata=bool(include_metadata),
+                single_document=bool(single_document),
+                background_color=str(background_color or ""),
+                front_footprint_property_popups=bool(front_footprint_property_popups),
+                back_footprint_property_popups=bool(back_footprint_property_popups),
+            ),
+            default_message="Unable to export the current board to PDF through the IPC API.",
+        )
+
+    async def export_board_ps(
+        self,
+        output_dir: str,
+        *,
+        force_a4: bool = False,
+        use_global_settings: bool = False,
+        plot_settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Export the current board to PostScript files inside output_dir."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_ps",
+                format_name="ps",
+                output_path=output_dir,
+                output_kind="directory",
+                path_argument_name="output_dir",
+                plot_settings=plot_settings,
+                force_a4=bool(force_a4),
+                use_global_settings=bool(use_global_settings),
+            ),
+            default_message="Unable to export the current board to PostScript through the IPC API.",
+        )
+
+    async def export_gerbers(
+        self,
+        output_dir: str,
+        *,
+        create_gerber_job_file: bool = False,
+        use_x2_format: bool = True,
+        include_netlist_attributes: bool = True,
+        use_protel_file_extensions: bool = True,
+        disable_aperture_macros: bool = False,
+        precision: int | str | None = None,
+        plot_settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Export the current board to Gerber files inside output_dir."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_gerbers",
+                format_name="gerbers",
+                output_path=output_dir,
+                output_kind="directory",
+                path_argument_name="output_dir",
+                plot_settings=plot_settings,
+                create_gerber_job_file=bool(create_gerber_job_file),
+                use_x2_format=bool(use_x2_format),
+                include_netlist_attributes=bool(include_netlist_attributes),
+                use_protel_file_extensions=bool(use_protel_file_extensions),
+                disable_aperture_macros=bool(disable_aperture_macros),
+                precision=self._resolve_proto_enum(
+                    precision,
+                    self._job_enum("GerberPrecision"),
+                    label="precision",
+                    default_name="GP_5",
+                ),
+            ),
+            default_message="Unable to export the current board to Gerber files through the IPC API.",
+        )
+
+    async def export_drill(
+        self,
+        output_dir: str,
+        *,
+        format: int | str | None = None,
+        origin: int | str | None = None,
+        map_format: int | str | None = None,
+        report_filename: str = "",
+        route_oval_holes: bool = False,
+        mirror_y: bool = False,
+        generate_tenting: bool = False,
+    ) -> dict[str, Any]:
+        """Export NC drill files (Excellon or Gerber format) inside output_dir."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_drill",
+                format_name="drill",
+                output_path=output_dir,
+                output_kind="directory",
+                path_argument_name="output_dir",
+                format=self._resolve_proto_enum(
+                    format,
+                    self._job_enum("DrillFormat"),
+                    label="format",
+                    default_name="DF_EXCELLON",
+                ),
+                origin=self._resolve_proto_enum(
+                    origin,
+                    self._job_enum("DrillOrigin"),
+                    label="origin",
+                ),
+                map_format=self._resolve_proto_enum(
+                    map_format,
+                    self._job_enum("DrillMapFormat"),
+                    label="map_format",
+                ),
+                report_filename=str(report_filename or ""),
+                route_oval_holes=bool(route_oval_holes),
+                mirror_y=bool(mirror_y),
+                generate_tenting=bool(generate_tenting),
+            ),
+            default_message="Unable to export the current board to drill files through the IPC API.",
+        )
+
+    async def export_position(
+        self,
+        output_file: str,
+        *,
+        settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Export pick-and-place position files from the current board."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_position",
+                format_name="position",
+                output_path=output_file,
+                output_kind="file",
+                path_argument_name="output_file",
+                settings=settings,
+                settings_key="position",
+            ),
+            default_message="Unable to export board position files through the IPC API.",
+        )
+
+    async def export_gencad(
+        self,
+        output_file: str,
+        *,
+        flip_bottom_pads: bool = False,
+        use_individual_shapes: bool = False,
+        store_origin_coords: bool = False,
+        use_drill_origin: bool = False,
+        use_unique_pins: bool = False,
+    ) -> dict[str, Any]:
+        """Export the current board to GenCAD format."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_gencad",
+                format_name="gencad",
+                output_path=output_file,
+                output_kind="file",
+                path_argument_name="output_file",
+                flip_bottom_pads=bool(flip_bottom_pads),
+                use_individual_shapes=bool(use_individual_shapes),
+                store_origin_coords=bool(store_origin_coords),
+                use_drill_origin=bool(use_drill_origin),
+                use_unique_pins=bool(use_unique_pins),
+            ),
+            default_message="Unable to export the current board to GenCAD through the IPC API.",
+        )
+
+    async def export_ipc2581(
+        self,
+        output_file: str,
+        *,
+        settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Export the current board to IPC-2581 format."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_ipc2581",
+                format_name="ipc2581",
+                output_path=output_file,
+                output_kind="file",
+                path_argument_name="output_file",
+                settings=settings,
+                settings_key="ipc2581",
+            ),
+            default_message="Unable to export the current board to IPC-2581 through the IPC API.",
+        )
+
+    async def export_ipc_d356(
+        self,
+        output_file: str,
+    ) -> dict[str, Any]:
+        """Export a board netlist in IPC-D-356 format."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_ipc_d356",
+                format_name="ipc_d356",
+                output_path=output_file,
+                output_kind="file",
+                path_argument_name="output_file",
+            ),
+            default_message="Unable to export the board netlist to IPC-D-356 through the IPC API.",
+        )
+
+    async def export_odb(
+        self,
+        output_dir: str,
+        *,
+        drawing_sheet: str = "",
+        variant: str = "",
+        units: int | str | None = None,
+        precision: int = 6,
+        compression: int | str | None = None,
+    ) -> dict[str, Any]:
+        """Export the current board to ODB++ format inside output_dir."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_odb",
+                format_name="odb",
+                output_path=output_dir,
+                output_kind="directory",
+                path_argument_name="output_dir",
+                drawing_sheet=str(drawing_sheet or ""),
+                variant=str(variant or ""),
+                units=self._resolve_proto_enum(
+                    units,
+                    self._common_enum("Units"),
+                    label="units",
+                    default_name="U_MM",
+                ),
+                precision=int(precision),
+                compression=self._resolve_proto_enum(
+                    compression,
+                    self._job_enum("OdbCompression"),
+                    label="compression",
+                    default_name="ODBC_ZIP",
+                ),
+            ),
+            default_message="Unable to export the current board to ODB++ through the IPC API.",
+        )
+
+    async def export_stats(
+        self,
+        output_file: str,
+        *,
+        format: int | str | None = None,
+        units: int | str | None = None,
+        exclude_footprints_without_pads: bool = False,
+        subtract_holes_from_board_area: bool = False,
+        subtract_holes_from_copper_areas: bool = False,
+    ) -> dict[str, Any]:
+        """Export board statistics (component and copper area reports)."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_stats",
+                format_name="stats",
+                output_path=output_file,
+                output_kind="file",
+                path_argument_name="output_file",
+                format=self._resolve_proto_enum(
+                    format,
+                    self._job_enum("StatsOutputFormat"),
+                    label="format",
+                    default_name="SOF_REPORT",
+                ),
+                units=self._resolve_proto_enum(
+                    units,
+                    self._common_enum("Units"),
+                    label="units",
+                    default_name="U_MM",
+                ),
+                exclude_footprints_without_pads=bool(exclude_footprints_without_pads),
+                subtract_holes_from_board_area=bool(subtract_holes_from_board_area),
+                subtract_holes_from_copper_areas=bool(subtract_holes_from_copper_areas),
+            ),
+            default_message="Unable to export board statistics through the IPC API.",
+        )
+
+    async def export_3d(
+        self,
+        output_file: str,
+        *,
+        settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Export the current board as a 3D model (STEP/STEPZ)."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_3d",
+                format_name="3d",
+                output_path=output_file,
+                output_kind="file",
+                path_argument_name="output_file",
+                settings=settings,
+                settings_key="3d",
+            ),
+            default_message="Unable to export the current board as a 3D model through the IPC API.",
+        )
+
+    async def export_render(
+        self,
+        output_file: str,
+        *,
+        settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Export a raytraced 3D render of the current board."""
+
+        return await self._run_board_read(
+            lambda board: self._export_board_job(
+                board,
+                method_name="export_render",
+                format_name="render",
+                output_path=output_file,
+                output_kind="file",
+                path_argument_name="output_file",
+                settings=settings,
+                settings_key="render",
+            ),
+            default_message="Unable to render the current board through the IPC API.",
+        )
+
+    # ------------------------------------------------------------------
+    # Design rules and embedded files (v0.3.0)
+    # ------------------------------------------------------------------
+    async def get_design_rules(self) -> dict[str, Any]:
+        """Return board design rules (minimum constraints, sizes, DRC severities)."""
+
+        return await self._run_board_read(
+            self._get_design_rules,
+            default_message=(
+                "Unable to read board design rules through the IPC API. "
+                "A KiCad 11 or newer board endpoint is required."
+            ),
+        )
+
+    async def set_design_rules(
+        self,
+        rules: dict[str, Any],
+        *,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Update board design rules, merging the given fields into the current rules."""
+
+        return await self._run_board_write(
+            lambda board, is_dry_run: self._set_design_rules(
+                board,
+                rules=rules,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to update board design rules through the IPC API.",
+            mutation_name="set_design_rules",
+            dry_run=dry_run,
+            use_commit=False,
+        )
+
+    async def get_custom_design_rules(self) -> dict[str, Any]:
+        """Return parsed custom design rules (KiCad's .kicad_dru content)."""
+
+        return await self._run_board_read(
+            self._get_custom_design_rules,
+            default_message=(
+                "Unable to read custom board design rules through the IPC API. "
+                "A KiCad 11 or newer board endpoint is required."
+            ),
+        )
+
+    async def set_custom_design_rules(
+        self,
+        rules: Sequence[dict[str, Any]],
+        *,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Replace custom design rules with the given structured rule objects."""
+
+        return await self._run_board_write(
+            lambda board, is_dry_run: self._set_custom_design_rules(
+                board,
+                rules=rules,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to update custom board design rules through the IPC API.",
+            mutation_name="set_custom_design_rules",
+            dry_run=dry_run,
+            use_commit=False,
+        )
+
+    async def get_embedded_files(
+        self,
+        *,
+        include_data: bool = False,
+    ) -> dict[str, Any]:
+        """List files embedded in the current board (fonts, models, datasheets)."""
+
+        return await self._run_board_read(
+            lambda board: self._get_embedded_files(board, include_data=bool(include_data)),
+            default_message="Unable to read board embedded files through the IPC API.",
+        )
+
+    async def add_embedded_files(
+        self,
+        paths: Sequence[str],
+        *,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Embed one or more local files into the current board."""
+
+        return await self._run_board_write(
+            lambda board, is_dry_run: self._set_embedded_files(
+                board,
+                paths=paths,
+                replace=False,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to add board embedded files through the IPC API.",
+            mutation_name="add_embedded_files",
+            dry_run=dry_run,
+            use_commit=False,
+        )
+
+    async def set_embedded_files(
+        self,
+        paths: Sequence[str],
+        *,
+        dry_run: bool = False,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Replace all embedded files of the current board with the given local files."""
+
+        return await self._run_board_write(
+            lambda board, is_dry_run: self._set_embedded_files(
+                board,
+                paths=paths,
+                replace=True,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to replace board embedded files through the IPC API.",
+            mutation_name="set_embedded_files",
+            dry_run=dry_run,
+            use_commit=False,
+            dangerous=True,
+            force=force,
+        )
+
+    async def import_netlist(
+        self,
+        netlist_path: str,
+        *,
+        match_mode: int | str = "uuid",
+        delete_extra_footprints: bool = True,
+        update_footprints: bool = True,
+        transfer_groups: bool = True,
+        override_locks: bool = False,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Import a schematic netlist file into the current board (forward annotation)."""
+
+        return await self._run_board_write(
+            lambda board, is_dry_run: self._import_netlist(
+                board,
+                netlist_path=netlist_path,
+                match_mode=match_mode,
+                delete_extra_footprints=bool(delete_extra_footprints),
+                update_footprints=bool(update_footprints),
+                transfer_groups=bool(transfer_groups),
+                override_locks=bool(override_locks),
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to import the schematic netlist through the IPC API.",
+            mutation_name="import_netlist",
+            dry_run=dry_run,
+            use_commit=False,
+        )
+
+    async def get_bounding_box(
+        self,
+        item_ids: Sequence[str],
+        *,
+        include_text: bool = False,
+    ) -> dict[str, Any]:
+        """Compute KiCad-side bounding boxes for the given board item IDs."""
+
+        return await self._run_board_read(
+            lambda board: self._get_bounding_box(
+                board,
+                item_ids=item_ids,
+                include_text=bool(include_text),
+            ),
+            default_message="Unable to compute board item bounding boxes through the IPC API.",
+        )
+
+    def _get_design_rules(self, board: Any) -> dict[str, Any]:
+        get_design_rules = getattr(board, "get_design_rules", None)
+        if not callable(get_design_rules):
+            raise KiCadCapabilityError(
+                "The active KiCad board does not expose get_design_rules(). "
+                "A KiCad 11 or newer board endpoint is required."
+            )
+
+        response = get_design_rules()
+        custom_rules_status = getattr(response, "custom_rules_status", None)
+        return {
+            "ok": True,
+            "board": self._serialize_board(board),
+            "custom_rules_status": self._enum_name(
+                self._board_command_enum("CustomRulesStatus"),
+                custom_rules_status,
+            ),
+            "custom_rules_status_value": self._enum_int_value(custom_rules_status),
+            "rules": self._proto_to_dict(getattr(getattr(response, "rules", None), "proto", None)),
+        }
+
+    def _set_design_rules(
+        self,
+        board: Any,
+        *,
+        rules: dict[str, Any],
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        if KiCadBoardDesignRules is None:
+            raise KiCadBindingUnavailableError(
+                "The kicad-python binding does not expose board design rule wrappers. "
+                "kicad-python 0.7 or newer is required for design rule updates."
+            )
+
+        get_design_rules = getattr(board, "get_design_rules", None)
+        set_design_rules = getattr(board, "set_design_rules", None)
+        if not callable(get_design_rules):
+            raise KiCadCapabilityError(
+                "The active KiCad board does not expose get_design_rules(). "
+                "A KiCad 11 or newer board endpoint is required."
+            )
+        if not callable(set_design_rules) and not dry_run:
+            raise KiCadCapabilityError(
+                "The active KiCad board does not expose set_design_rules()."
+            )
+        if not isinstance(rules, dict) or not rules:
+            raise KiCadLookupError(
+                "rules must be a non-empty object containing board design rule fields."
+            )
+
+        current_rules = getattr(get_design_rules(), "rules", None)
+        current_proto = getattr(current_rules, "proto", None)
+        if current_proto is None:
+            raise KiCadCapabilityError(
+                "The active KiCad board did not return a usable design rule payload."
+            )
+
+        merged_proto = type(current_proto)()
+        merged_proto.CopyFrom(current_proto)
+        self._merge_proto_dict(merged_proto, rules, label="rules")
+
+        if not dry_run:
+            set_design_rules(KiCadBoardDesignRules(merged_proto))
+
+        applied_rules = merged_proto if dry_run else getattr(get_design_rules(), "rules", None)
+        return {
+            "board": self._serialize_board(board),
+            "requested_fields": sorted(str(key) for key in rules),
+            "previous_rules": self._proto_to_dict(current_proto),
+            "rules": self._proto_to_dict(getattr(applied_rules, "proto", applied_rules)),
+        }
+
+    def _get_custom_design_rules(self, board: Any) -> dict[str, Any]:
+        get_custom_rules = getattr(board, "get_custom_design_rules", None)
+        if not callable(get_custom_rules):
+            raise KiCadCapabilityError(
+                "The active KiCad board does not expose get_custom_design_rules(). "
+                "A KiCad 11 or newer board endpoint is required."
+            )
+
+        return {
+            "ok": True,
+            "board": self._serialize_board(board),
+            **self._serialize_custom_rules_response(get_custom_rules()),
+        }
+
+    def _set_custom_design_rules(
+        self,
+        board: Any,
+        *,
+        rules: Sequence[dict[str, Any]],
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        if KiCadCustomRule is None or KiCadBoardRulesProto is None:
+            raise KiCadBindingUnavailableError(
+                "The kicad-python binding does not expose custom rule wrappers. "
+                "kicad-python 0.7 or newer is required for custom rule updates."
+            )
+
+        set_custom_rules = getattr(board, "set_custom_design_rules", None)
+        if not callable(set_custom_rules) and not dry_run:
+            raise KiCadCapabilityError(
+                "The active KiCad board does not expose set_custom_design_rules(). "
+                "A KiCad 11 or newer board endpoint is required."
+            )
+
+        specs = list(rules or [])
+        rule_protos = []
+        for index, spec in enumerate(specs):
+            if not isinstance(spec, dict):
+                raise KiCadLookupError(
+                    f"rules[{index}] must be an object containing custom rule fields."
+                )
+
+            proto = KiCadBoardRulesProto.CustomRule()
+            self._merge_proto_dict(proto, spec, label=f"rules[{index}]")
+            rule_protos.append(proto)
+
+        requested_rules = self._proto_to_dict_list(rule_protos)
+        response = None if dry_run else set_custom_rules([KiCadCustomRule(proto) for proto in rule_protos])
+
+        result: dict[str, Any] = {
+            "board": self._serialize_board(board),
+            "requested_count": len(rule_protos),
+            "requested_rules": requested_rules,
+        }
+        if response is not None:
+            result.update(self._serialize_custom_rules_response(response))
+        else:
+            result["status"] = None
+            result["error_text"] = ""
+            result["count"] = len(rule_protos)
+            result["rules"] = requested_rules
+        return result
+
+    def _serialize_custom_rules_response(self, response: Any) -> dict[str, Any]:
+        status = getattr(response, "status", None)
+        rules = list(getattr(response, "rules", []) or [])
+        return {
+            "status": self._enum_name(self._board_command_enum("CustomRulesStatus"), status),
+            "status_value": self._enum_int_value(status),
+            "error_text": str(getattr(response, "error_text", "") or ""),
+            "count": len(rules),
+            "rules": [self._proto_to_dict(getattr(rule, "proto", None)) for rule in rules],
+        }
+
+    def _proto_to_dict_list(self, protos: Sequence[Any]) -> list[dict[str, Any] | None]:
+        return [self._proto_to_dict(proto) for proto in protos]
+
+    def _get_embedded_files(self, board: Any, *, include_data: bool) -> dict[str, Any]:
+        get_embedded_files = getattr(board, "get_embedded_files", None)
+        if not callable(get_embedded_files):
+            raise KiCadCapabilityError(
+                "The active KiCad board does not expose get_embedded_files(). "
+                "A KiCad 10.0.7 or newer board endpoint is required."
+            )
+
+        entries = [
+            self._serialize_embedded_file(file, include_data=include_data)
+            for file in list(getattr(get_embedded_files(), "files", []) or [])
+        ]
+        return {
+            "ok": True,
+            "board": self._serialize_board(board),
+            "include_data": include_data,
+            "count": len(entries),
+            "files": entries,
+        }
+
+    def _serialize_embedded_file(self, file: Any, *, include_data: bool) -> dict[str, Any]:
+        data = getattr(file, "data", b"") or b""
+        if isinstance(data, str):
+            encoded_data = data
+            compressed_size = len(data)
+        else:
+            encoded_data = bytes(data).decode("ascii", errors="replace")
+            compressed_size = len(bytes(data))
+
+        entry: dict[str, Any] = {
+            "name": getattr(file, "name", ""),
+            "type": self._embedded_file_type_name(getattr(file, "type", None)),
+            "type_value": self._enum_int_value(getattr(file, "type", None)),
+            "data_hash": getattr(file, "data_hash", ""),
+            "compressed_size": compressed_size,
+        }
+        if include_data:
+            entry["data_base64"] = encoded_data
+        return entry
+
+    def _embedded_file_type_name(self, value: Any) -> str | None:
+        resolved = self._enum_int_value(value)
+        for name, enum_value in EMBEDDED_FILE_TYPE_NAMES.items():
+            if enum_value == resolved:
+                return name
+        return None
+
+    def _set_embedded_files(
+        self,
+        board: Any,
+        *,
+        paths: Sequence[str],
+        replace: bool,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        if KiCadEmbeddedFile is None:
+            raise KiCadBindingUnavailableError(
+                "The kicad-python binding does not expose embedded file helpers. "
+                "kicad-python 0.9 or newer is required for embedded file updates."
+            )
+
+        get_embedded_files = getattr(board, "get_embedded_files", None)
+        if not callable(get_embedded_files):
+            raise KiCadCapabilityError(
+                "The active KiCad board does not expose get_embedded_files(). "
+                "A KiCad 10.0.7 or newer board endpoint is required."
+            )
+
+        update_method_name = "set_embedded_files" if replace else "add_embedded_files"
+        update_method = getattr(board, update_method_name, None)
+        if not callable(update_method) and not dry_run:
+            raise KiCadCapabilityError(
+                f"The active KiCad board does not expose {update_method_name}()."
+            )
+
+        resolved_paths = [self._require_embedded_file_path(path) for path in list(paths or [])]
+        if replace and not resolved_paths:
+            raise KiCadLookupError(
+                "paths must contain at least one file when replacing embedded files."
+            )
+
+        files = []
+        for path in resolved_paths:
+            try:
+                files.append(KiCadEmbeddedFile.from_path(path))
+            except OSError as exc:
+                raise KiCadLookupError(
+                    f"Unable to read embedded file source {path!r}: {exc}"
+                ) from exc
+
+        requested_files = [
+            self._serialize_embedded_file(file, include_data=False) for file in files
+        ]
+        previous_files = [
+            self._serialize_embedded_file(file, include_data=False)
+            for file in list(getattr(get_embedded_files(), "files", []) or [])
+        ]
+
+        if not dry_run:
+            update_method(files)
+
+        applied_files = [
+            self._serialize_embedded_file(file, include_data=False)
+            for file in list(getattr(get_embedded_files(), "files", []) or [])
+        ]
+        return {
+            "board": self._serialize_board(board),
+            "replace": replace,
+            "requested_paths": resolved_paths,
+            "requested_files": requested_files,
+            "previous_count": len(previous_files),
+            "previous_files": previous_files,
+            "count": len(applied_files),
+            "files": applied_files,
+        }
+
+    def _require_embedded_file_path(self, path: str) -> str:
+        resolved_path = str(path or "").strip()
+        if not resolved_path:
+            raise KiCadLookupError("paths must contain non-empty file paths.")
+
+        target = Path(resolved_path)
+        if not target.is_file():
+            raise KiCadLookupError(f"Embedded file source does not exist: {resolved_path}")
+
+        return resolved_path
+
+    def _import_netlist(
+        self,
+        board: Any,
+        *,
+        netlist_path: str,
+        match_mode: int | str,
+        delete_extra_footprints: bool,
+        update_footprints: bool,
+        transfer_groups: bool,
+        override_locks: bool,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        import_netlist = getattr(board, "import_netlist", None)
+        if not callable(import_netlist):
+            raise KiCadCapabilityError(
+                "The active KiCad board does not expose import_netlist()."
+            )
+
+        resolved_netlist_path = str(netlist_path or "").strip()
+        if not resolved_netlist_path:
+            raise KiCadLookupError("netlist_path must point to a netlist file exported from the schematic.")
+        if not Path(resolved_netlist_path).is_file():
+            raise KiCadLookupError(f"netlist_path does not point to a readable file: {resolved_netlist_path}")
+
+        resolved_match_mode, match_mode_name = self._resolve_netlist_match_mode(match_mode)
+        result = import_netlist(
+            resolved_netlist_path,
+            dry_run=dry_run,
+            match_mode=resolved_match_mode,
+            delete_extra_footprints=delete_extra_footprints,
+            update_footprints=update_footprints,
+            transfer_groups=transfer_groups,
+            override_locks=override_locks,
+        )
+        return {
+            "board": self._serialize_board(board),
+            "netlist_path": resolved_netlist_path,
+            "match_mode": match_mode_name,
+            "requested_options": {
+                "delete_extra_footprints": delete_extra_footprints,
+                "update_footprints": update_footprints,
+                "transfer_groups": transfer_groups,
+                "override_locks": override_locks,
+            },
+            "report": str(getattr(result, "report", "") or ""),
+            "error_count": int(getattr(result, "error_count", 0) or 0),
+            "warning_count": int(getattr(result, "warning_count", 0) or 0),
+            "new_footprint_count": int(getattr(result, "new_footprint_count", 0) or 0),
+        }
+
+    def _resolve_netlist_match_mode(self, match_mode: int | str) -> tuple[int, str | None]:
+        container = self._board_command_enum("NetlistMatchMode")
+        alias = None
+        if isinstance(match_mode, str):
+            alias = NETLIST_MATCH_MODE_NAMES.get(match_mode.strip().lower())
+            if alias is not None and container is not None:
+                return int(getattr(container, alias)), match_mode.strip().lower()
+
+        resolved = self._resolve_proto_enum(
+            match_mode,
+            container,
+            label="match_mode",
+            default_name="NMM_UUID",
+        )
+        return int(resolved or 0), self._enum_name(container, resolved)
+
+    def _get_bounding_box(
+        self,
+        board: Any,
+        *,
+        item_ids: Sequence[str],
+        include_text: bool,
+    ) -> dict[str, Any]:
+        get_bounding_box = getattr(board, "get_item_bounding_box", None)
+        if not callable(get_bounding_box):
+            raise KiCadCapabilityError(
+                "The active KiCad board does not expose get_item_bounding_box()."
+            )
+
+        resolved_item_ids = self._normalize_item_ids(item_ids)
+        items = self._resolve_board_items_by_ids(board, resolved_item_ids)
+        boxes = list(get_bounding_box(items, include_text=include_text) or [])
+        serialized_boxes = [serialize_box(box) for box in boxes]
+        return {
+            "ok": True,
+            "board": self._serialize_board(board),
+            "item_ids": resolved_item_ids,
+            "include_text": include_text,
+            "count": len(serialized_boxes),
+            "boxes": serialized_boxes,
+            "bounding_box": merge_boxes(serialized_boxes),
+            "note": (
+                None
+                if len(serialized_boxes) == len(items)
+                else "Some items do not provide a bounding box; unmatched entries are omitted."
+            ),
+        }
+
+    def _export_board_job(
+        self,
+        board: Any,
+        *,
+        method_name: str,
+        format_name: str,
+        output_path: str,
+        output_kind: str,
+        path_argument_name: str,
+        plot_settings: dict[str, Any] | None = None,
+        settings: dict[str, Any] | None = None,
+        settings_key: str | None = None,
+        **options: Any,
+    ) -> dict[str, Any]:
+        export_method = getattr(board, method_name, None)
+        if not callable(export_method):
+            raise KiCadCapabilityError(
+                f"The active KiCad board does not expose {method_name}(). "
+                "A KiCad 10 or newer board endpoint is required."
+            )
+
+        validated_output_path = self._validate_board_export_target(
+            output_path,
+            format_name=format_name,
+            output_kind=output_kind,
+            path_argument_name=path_argument_name,
+        )
+
+        call_kwargs = {key: value for key, value in options.items() if value is not None}
+        resolved_plot_settings = (
+            self._create_board_plot_settings(board, plot_settings)
+            if plot_settings is not None
+            else None
+        )
+        if resolved_plot_settings is not None:
+            call_kwargs["plot_settings"] = resolved_plot_settings
+
+        resolved_settings = None
+        if settings is not None:
+            if settings_key is None:
+                raise KiCadLookupError(
+                    f"{format_name} export settings are not supported for this export type."
+                )
+            resolved_settings = self._create_board_job_settings(settings_key, settings)
+            call_kwargs["settings"] = resolved_settings
+
+        job_result = export_method(validated_output_path, **call_kwargs)
+        result: dict[str, Any] = {
+            "ok": True,
+            "board": self._serialize_board(board),
+            "format": format_name,
+            "output_kind": output_kind,
+            "output_path": validated_output_path,
+            "requested_plot_settings": serialize_board_plot_settings(resolved_plot_settings),
+            "requested_options": call_kwargs or None,
+            "job": serialize_job_result(job_result),
+        }
+        result[path_argument_name] = validated_output_path
+        return result
+
+    def _validate_board_export_target(
+        self,
+        output_path: str,
+        *,
+        format_name: str,
+        output_kind: str,
+        path_argument_name: str,
+    ) -> str:
+        normalized_output_path = str(output_path or "").strip()
+        if not normalized_output_path:
+            raise KiCadLookupError(f"{path_argument_name} must be a non-empty path.")
+
+        target = Path(normalized_output_path)
+        if output_kind == "directory":
+            if target.exists() and not target.is_dir():
+                raise KiCadLookupError(
+                    f"{path_argument_name} must point to a directory for board "
+                    f"{format_name.upper()} export, but the existing path is a file."
+                )
+            return normalized_output_path
+
+        if output_kind == "file":
+            if target.exists() and target.is_dir():
+                raise KiCadLookupError(
+                    f"{path_argument_name} must point to an output file for board "
+                    f"{format_name.upper()} export, but the existing path is a directory."
+                )
+            if normalized_output_path.endswith(("/", "\\")):
+                raise KiCadLookupError(
+                    f"{path_argument_name} must point to an output file for board "
+                    f"{format_name.upper()} export, not a directory path."
+                )
+            return normalized_output_path
+
+        raise KiCadLookupError(f"Unsupported board export output kind: {output_kind!r}.")
+
+    def _create_board_job_settings(self, settings_key: str, settings: dict[str, Any]) -> Any:
+        settings_class = BOARD_JOB_SETTINGS_TYPES.get(str(settings_key).strip().lower())
+        if settings_class is None:
+            raise KiCadLookupError(
+                f"Unsupported export settings type {settings_key!r}. Supported types: "
+                + ", ".join(sorted(BOARD_JOB_SETTINGS_TYPES))
+                + "."
+            )
+
+        return self._build_settings_wrapper(settings_class, settings, label=f"{settings_key} settings")
+
+    def _build_settings_wrapper(self, settings_class: Any, payload: dict[str, Any], *, label: str) -> Any:
+        if not isinstance(payload, dict):
+            raise KiCadLookupError(f"{label} must be an object containing KiCad job settings fields.")
+
+        try:
+            wrapper = settings_class()
+        except Exception as exc:  # noqa: BLE001
+            raise KiCadCapabilityError(
+                f"The active kicad-python binding does not expose {settings_class.__name__}."
+            ) from exc
+
+        self._merge_proto_dict(wrapper.proto, payload, label=label)
+        return wrapper
+
+    def _job_enum(self, enum_name: str) -> Any:
+        if KiCadBoardJobsProto is None:
+            return None
+
+        return getattr(KiCadBoardJobsProto, enum_name, None)
+
+    def _board_command_enum(self, enum_name: str) -> Any:
+        if KiCadBoardCommandsProto is None:
+            return None
+
+        return getattr(KiCadBoardCommandsProto, enum_name, None)
+
+    def _common_enum(self, enum_name: str) -> Any:
+        if KiCadCommonEnumsProto is None:
+            return None
+
+        return getattr(KiCadCommonEnumsProto, enum_name, None)
+
+    def _resolve_proto_enum(
+        self,
+        value: Any,
+        container: Any,
+        *,
+        label: str,
+        default_name: str | None = None,
+    ) -> int | None:
+        if container is None:
+            if value is None:
+                return None
+            if isinstance(value, bool):
+                raise KiCadLookupError(f"{label} must be an enum name or numeric value.")
+            if isinstance(value, int):
+                return int(value)
+
+            raise KiCadBindingUnavailableError(
+                f"The kicad-python binding does not expose the {label} enum container."
+            )
+
+        default_value = getattr(container, default_name, None) if default_name else None
+        fallback = None if default_value is None else int(default_value)
+
+        if value is None:
+            return fallback
+        if isinstance(value, bool):
+            raise KiCadLookupError(f"{label} must be an enum name or numeric value.")
+        if isinstance(value, int):
+            return int(value)
+
+        normalized = str(value).strip()
+        if not normalized:
+            return fallback
+
+        name = normalized if normalized.isupper() else normalized.upper()
+        candidate = getattr(container, name, None)
+        if candidate is None and "_" not in name:
+            prefixed_name = f"{self._enum_name_prefix(container)}{name}"
+            candidate = getattr(container, prefixed_name, None)
+            if candidate is not None:
+                name = prefixed_name
+
+        if candidate is None:
+            valid = ", ".join(sorted(container.keys())) if hasattr(container, "keys") else "unknown"
+            raise KiCadLookupError(
+                f"Unsupported {label} value {value!r}. Valid values: {valid}."
+            )
+
+        return int(candidate)
+
+    def _enum_name_prefix(self, container: Any) -> str:
+        """Return the shared enum-name prefix such as ``DF_`` or ``GP_``."""
+        keys_method = getattr(container, "keys", None)
+        if not callable(keys_method):
+            return ""
+
+        names = [str(key) for key in keys_method()]
+        if len(names) < 2:
+            return ""
+
+        prefix = names[0]
+        for candidate_name in names[1:]:
+            while prefix and not candidate_name.startswith(prefix):
+                prefix = prefix[:-1]
+
+        if "_" in prefix:
+            return prefix[: prefix.rindex("_") + 1]
+
+        return ""
+
+    def _enum_name(self, container: Any, value: Any) -> str | None:
+        if value is None or container is None:
+            return None
+
+        name_method = getattr(container, "Name", None)
+        if callable(name_method):
+            try:
+                return str(name_method(int(value)))
+            except Exception:  # noqa: BLE001
+                return None
+
+        return None
+
+    def _proto_to_dict(self, proto: Any) -> dict[str, Any] | None:
+        if proto is None:
+            return None
+
+        return self._proto_message_to_dict(proto)
+
+    def _proto_message_to_dict(self, message: Any) -> dict[str, Any]:
+        """Convert a protobuf message to plain Python values (ints stay ints)."""
+        if message is None:
+            return {}
+
+        result: dict[str, Any] = {}
+        for field, value in message.ListFields():
+            name = str(field.name)
+            if self._is_repeated_field(field):
+                if field.message_type is not None:
+                    result[name] = [self._proto_message_to_dict(item) for item in value]
+                else:
+                    result[name] = [self._proto_scalar_value(item) for item in value]
+            elif field.message_type is not None:
+                result[name] = self._proto_message_to_dict(value)
+            else:
+                result[name] = self._proto_scalar_value(value)
+
+        return result
+
+    def _proto_scalar_value(self, value: Any) -> Any:
+        if isinstance(value, (bytes, bytearray)):
+            return base64.b64encode(bytes(value)).decode("ascii")
+
+        return value
+
+    def _merge_proto_dict(self, proto: Any, payload: dict[str, Any], *, label: str) -> None:
+        if _parse_dict is None:
+            raise KiCadBindingUnavailableError(
+                "The protobuf runtime is missing, so KiCad payloads cannot be parsed."
+            )
+        if not isinstance(payload, dict):
+            raise KiCadLookupError(f"{label} must be an object.")
+
+        descriptor = getattr(proto, "DESCRIPTOR", None)
+        if descriptor is not None:
+            for key in payload:
+                field = descriptor.fields_by_name.get(str(key))
+                if field is None:
+                    valid = ", ".join(sorted(descriptor.fields_by_name))
+                    raise KiCadLookupError(
+                        f"Unknown {label} field {key!r}. Valid fields: {valid}."
+                    )
+                if self._is_repeated_field(field):
+                    proto.ClearField(str(key))
+
+        try:
+            _parse_dict(payload, proto, ignore_unknown_fields=False)
+        except Exception as exc:  # noqa: BLE001
+            raise KiCadLookupError(f"{label} could not be parsed: {exc}") from exc
+
+    def _is_repeated_field(self, field: Any) -> bool:
+        is_repeated = getattr(field, "is_repeated", None)
+        if isinstance(is_repeated, bool):
+            return is_repeated
+
+        repeated_label = getattr(type(field), "LABEL_REPEATED", 3)
+        return getattr(field, "label", 1) == repeated_label
 
     async def _run_board_read(
         self,

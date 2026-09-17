@@ -16,6 +16,34 @@ Usage videos are available at [kipilot.org/galery.html](https://kipilot.org/gale
 
 Public project documentation is available at [kipilot.org/docs.html](https://kipilot.org/docs.html).
 
+## What's New In 0.3.0
+
+The 0.3.0 release grows the MCP surface from 102 to 135 tools and closes the largest gaps between the
+Python binding surface and the MCP tool surface:
+
+- **Board manufacturing export jobs (14 new tools)** — SVG, DXF, PDF, PostScript, Gerber, NC drill,
+  pick-and-place position, GenCAD, IPC-2581, IPC-D-356, ODB++, statistics, STEP/STEPZ 3D models, and
+  raytraced 3D renders, all driven by the KiCad-side export jobs of the IPC API
+- **Design rule access (4 new tools)** — read and merge-update board design rules (minimum constraints,
+  predefined sizes, DRC severities, exclusions) and read/replace custom rules
+- **Embedded file management (3 new tools)** — list, add, or replace fonts, 3D models, and datasheets
+  embedded in the board file; `kicad-python` performs the zstd compression for you
+- **Netlist import and geometry helpers (2 new tools)** — forward-annotate a schematic netlist into the
+  board, and query KiCad-side bounding boxes for board items
+- **Workspace and session tools (8 new tools)** — KiCad filesystem paths, binary and plugin settings
+  paths, TOOL_ACTION execution, headless document open/create/close, and project net class writes
+- **Schematic lifecycle (2 new tools)** — `kicad_sch_save_as` and `kicad_sch_revert`
+- **Richer item reads** — `kicad_get_items` now covers board tables, grid items, constraints, and
+  reference points, while `kicad_sch_get_items` additionally reads sheets, sheet pins, images, shapes,
+  bus entries, rule areas, tables, groups, text boxes, directive labels, fields, and pins
+- **Verification script** — `scripts/verify_v0_3_0.py` exercises the new surface against an in-process
+  fake endpoint (and a live endpoint when one is reachable), so the release can be checked without a
+  running KiCad instance
+
+Every new mutation keeps the existing safety contract: `dry_run` previews without the mutation gate,
+real writes need `KIPILOT_ENABLE_MUTATIONS=1`, and destructive operations (embedded-file replacement,
+schematic revert) also need `force=true`.
+
 ## Overview
 
 KiPilot exists to let an MCP client inspect and manipulate KiCad documents that are already open in the user-controlled GUI session, with PCB workflows as the primary baseline.
@@ -38,10 +66,15 @@ Implemented MCP surface includes:
 - MCP stdio server entry point
 - Async-friendly KiCad IPC client wrapper around `kipy.KiCad`
 - Connectivity and version checks such as `ping_kicad` and `get_kicad_version`
-- Board and document inspection tools for open documents, outlines, stackup, footprints, nets, pads, tracks, vias, zones, graphics, dimensions, groups, reference images, barcodes, text, text geometry, project text variables, project net classes, origins, title blocks, selection state, and connectivity
+- Board and document inspection tools for open documents, outlines, stackup, footprints, nets, pads, tracks, vias, zones, graphics, dimensions, groups, reference images, barcodes, tables, grid items, constraints, reference points, text, text geometry, bounding boxes, project text variables, project net classes, origins, title blocks, selection state, and connectivity
 - Filtered lookup tools for footprints, footprint-scoped pads, nets, net classes, and connected items
-- Guarded mutation tools for visible layers, active layer, enabled layers, footprint move/rotate/flip, footprint pad net reassignment, origins, title block fields, board text, track creation, via creation, item updates, track geometry, zone outlines, item deletion, zone refill, board revert, and board save
-- Schematic hierarchy, netlist, hit-testing, page-settings, title-block, metadata-mutation, and export tools when the active KiCad runtime exposes schematic IPC support
+- Board manufacturing export tools for SVG, DXF, PDF, PostScript, Gerber, drill, position, GenCAD, IPC-2581, IPC-D-356, ODB++, statistics, 3D models, and 3D renders
+- Design rule tools for board design rules, custom rules, DRC severities, and rule exclusions
+- Embedded file tools for fonts, 3D models, and datasheets stored inside the board file
+- Workspace tools for KiCad paths, binaries, plugin settings directories, TOOL_ACTION execution, and headless document lifecycle
+- Guarded mutation tools for visible layers, active layer, enabled layers, footprint move/rotate/flip, footprint pad net reassignment, origins, title block fields, board text, track creation, via creation, item updates, track geometry, zone outlines, item deletion, zone refill, netlist import, project net classes, board revert, and board save
+- Schematic hierarchy, netlist, hit-testing, page-settings, title-block, metadata-mutation, lifecycle (save-as/revert), item reads, and export tools when the active KiCad runtime exposes schematic IPC support
+- 135 MCP tools total, covered by unit tests plus a runnable verification script
 - Unit tests for IPC connection and error-handling behavior
 
 Committed baseline:
@@ -53,6 +86,8 @@ Committed baseline:
 - No committed headless automation scope
 
 ## Schematic MCP Surface
+
+See the new surface section below for the 0.3.0 schematic lifecycle tools and the extended item kinds.
 
 The schematic surface is intentionally smaller and more runtime-dependent than the PCB surface.
 
@@ -71,6 +106,78 @@ Important export semantics:
 - `kicad_sch_export_netlist` and `kicad_sch_export_bom` also take `output_file` because they produce single file outputs.
 - When you want a full schematic export, `plot_all=true` with omitted `plot_pages` is the safest default unless you already know the exact sheet-instance paths to filter.
 - In this environment, live end-to-end schematic MCP validation succeeded against a locally built `kicad-master` `eeschema` snapshot. The installed official KiCad 10.0.1 build did not expose the same reliable external schematic IPC behavior, so treat the schematic surface as source-build-gated rather than universally available across all KiCad 10 installations. Upstream KiCad 10.0.x registers only `GetOpenDocuments` on the schematic API handler, which is why the schematic tools need a KiCad 11 (master/nightly) build.
+
+## Board Export, Rules And Workspace Surface (0.3.0)
+
+### Board export jobs
+
+These tools call the KiCad-side export jobs of the IPC API, so the output matches what the GUI and
+`kicad-cli` produce. Directory-output jobs write one file per layer (or per board) into a directory;
+file-output jobs write exactly one file.
+
+| Tool | Output | Notes |
+| --- | --- | --- |
+| `kicad_export_board_svg` | directory | `fit_page_to_board`, `precision`, optional `plot_settings` |
+| `kicad_export_board_dxf` | directory | contour plotting, polygon mode, units |
+| `kicad_export_board_pdf` | file | metadata, single-document mode, background color, property popups |
+| `kicad_export_board_ps` | directory | `force_a4`, global settings |
+| `kicad_export_gerbers` | directory | X2 attributes, job file, Protel extensions, precision |
+| `kicad_export_drill` | directory | `drill_format` (`excellon` or `gerber`), origin, map format, report file |
+| `kicad_export_position` | file | optional `PositionExportSettings`-shaped mapping |
+| `kicad_export_gencad` | file | pad flipping, individual shapes, drill origin |
+| `kicad_export_ipc2581` | file | optional settings mapping |
+| `kicad_export_ipc_d356` | file | — |
+| `kicad_export_odb` | directory | units, precision, compression, drawing sheet, variant |
+| `kicad_export_stats` | file | report or JSON output |
+| `kicad_export_3d` | file | STEP/STEPZ, optional settings mapping |
+| `kicad_export_render` | file | raytraced render, optional settings mapping |
+
+`plot_settings` accepts the same object shape as `kicad_set_board_plot_settings`, so a plot preset can be
+read once with `kicad_get_board_plot_settings`, adjusted, and reused for several export formats. Settings
+mappings for 3D, render, position, and IPC-2581 exports use snake_case proto field names and are merged
+into the matching KiCad job settings object; unknown fields are rejected with a helpful error.
+
+### Design rules
+
+| Tool | Kind | Notes |
+| --- | --- | --- |
+| `kicad_get_design_rules` | read | minimum constraints, predefined sizes, solder mask/paste, teardrops, via protection, DRC severities and exclusions (KiCad 11) |
+| `kicad_set_design_rules` | guarded write | merges the given fields into the current rules; repeated fields are replaced, not appended |
+| `kicad_get_custom_design_rules` | read | parsed `.kicad_dru` rules plus parse status and error text |
+| `kicad_set_custom_design_rules` | guarded write | replaces the custom rule set; an empty list clears the rules file |
+
+Design rule payloads round-trip: the objects returned by the `kicad_get_*` tools can be edited and passed
+back to the matching `kicad_set_*` tool, because both directions use the same proto field names.
+
+### Embedded files
+
+| Tool | Kind | Notes |
+| --- | --- | --- |
+| `kicad_get_embedded_files` | read | lists name, type, hash, and compressed size; `include_data=true` also returns base64 payloads |
+| `kicad_add_embedded_files` | guarded write | embeds the given local files, keeping existing embedded files |
+| `kicad_set_embedded_files` | guarded + destructive | replaces all embedded files, therefore also requires `force=true` |
+
+### Forward annotation, geometry and workspace
+
+| Tool | Kind | Notes |
+| --- | --- | --- |
+| `kicad_import_netlist` | guarded write | imports a schematic netlist: match mode (`uuid`/`reference`), delete extra footprints, update footprints, transfer groups, override locks |
+| `kicad_get_bounding_box` | read | KiCad-side bounding boxes for up to N board item IDs, plus a merged box |
+| `kicad_set_project_net_classes` | guarded write | creates or updates net classes; `merge_mode` is `merge` or `replace` |
+| `kicad_get_paths` | read | well-known KiCad filesystem paths (library, template, plugin roots) |
+| `kicad_get_kicad_binary_path` | read | absolute path of a KiCad binary such as `kicad-cli` |
+| `kicad_get_plugin_settings_path` | read | per-plugin writable settings directory |
+| `kicad_run_action` | guarded write | runs a KiCad TOOL_ACTION by name, for example `pcbnew.EditorControl.zoneFillAll` |
+| `kicad_open_document` | guarded write | headless API server sessions only |
+| `kicad_create_document` | guarded write | headless API server sessions only |
+| `kicad_close_document` | guarded write | headless API server sessions only |
+
+### Item kinds
+
+`kicad_get_items` accepts the additional board item kinds `table`, `grid_item`, `constraint`, and
+`reference_point`. `kicad_sch_get_items` accepts the additional schematic read kinds `sheet`, `sheet_pin`,
+`image`, `shape`, `bus_entry`, `rule_area`, `table`, `group`, `text_box`, `directive_label`, `field`, and
+`pin`. Only the original creation kinds can be created or updated; the additional kinds are read-only.
 
 ## Requirements
 
@@ -259,6 +366,12 @@ Run tests:
 python -m pytest
 ```
 
+Run the release verification script (fake endpoint plus optional live endpoint):
+
+```powershell
+python scripts/verify_v0_3_0.py
+```
+
 Run linting:
 
 ```powershell
@@ -296,8 +409,12 @@ Release process checklist: see `RELEASE-CHECKLIST.md`.
 |       |-- lookups.py
 |       |-- serializers.py
 |       `-- server.py
+|-- scripts/
+|   `-- verify_v0_3_0.py
 |-- tests/
-|   `-- test_ipc_client.py
+|   |-- test_ipc_client.py
+|   |-- test_ipc_client_schematic_write.py
+|   `-- test_ipc_client_v030.py
 |-- KiPilot.svg
 |-- build-windows-zip.ps1
 |-- pyproject.toml

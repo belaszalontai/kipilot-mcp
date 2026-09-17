@@ -1619,6 +1619,574 @@ async def kicad_save_board_as(
     )
 
 
+# ---------------------------------------------------------------------------
+# v0.3.0: workspace, document lifecycle and session tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def kicad_get_paths() -> dict[str, Any]:
+    """Return KiCad's well-known filesystem paths (library, template and plugin roots)."""
+
+    return await _run_client_tool("kicad_get_paths", "get_paths")
+
+
+@mcp.tool()
+async def kicad_get_kicad_binary_path(binary_name: str = "kicad-cli") -> dict[str, Any]:
+    """Resolve the absolute path of a KiCad binary such as kicad-cli."""
+
+    return await _run_client_tool(
+        "kicad_get_kicad_binary_path",
+        "get_kicad_binary_path",
+        binary_name=binary_name,
+    )
+
+
+@mcp.tool()
+async def kicad_get_plugin_settings_path(identifier: str) -> dict[str, Any]:
+    """Return a writable per-plugin settings directory recommended by KiCad."""
+
+    return await _run_client_tool(
+        "kicad_get_plugin_settings_path",
+        "get_plugin_settings_path",
+        identifier=identifier,
+    )
+
+
+@mcp.tool()
+async def kicad_run_action(action: str, dry_run: bool = False) -> dict[str, Any]:
+    """Run a KiCad TOOL_ACTION by name, for example 'pcbnew.EditorControl.zoneFillAll'."""
+
+    return await _run_client_tool(
+        "kicad_run_action",
+        "run_action",
+        action,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_open_document(
+    path: str,
+    document_type: str = "pcb",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Open a document in a headless KiCad API server session (pcb, schematic, project)."""
+
+    return await _run_client_tool(
+        "kicad_open_document",
+        "open_document",
+        path,
+        document_type,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_create_document(
+    path: str,
+    document_type: str = "pcb",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Create a new in-memory document in a headless KiCad API server session."""
+
+    return await _run_client_tool(
+        "kicad_create_document",
+        "create_document",
+        path,
+        document_type,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_close_document(
+    path: str,
+    document_type: str = "pcb",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Close an open document in a headless KiCad API server session."""
+
+    return await _run_client_tool(
+        "kicad_close_document",
+        "close_document",
+        path,
+        document_type,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_set_project_net_classes(
+    net_classes: list[dict[str, Any]],
+    merge_mode: str = "merge",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Create or update project net classes such as clearance, track width and via sizes."""
+
+    return await _run_client_tool(
+        "kicad_set_project_net_classes",
+        "set_project_net_classes",
+        net_classes,
+        merge_mode=merge_mode,
+        dry_run=dry_run,
+    )
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0: board export jobs
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def kicad_export_board_svg(
+    output_dir: str,
+    fit_page_to_board: bool = False,
+    precision: int = 4,
+    plot_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export the current board to SVG files inside output_dir."""
+
+    return await _run_client_tool(
+        "kicad_export_board_svg",
+        "export_board_svg",
+        output_dir=output_dir,
+        fit_page_to_board=fit_page_to_board,
+        precision=precision,
+        plot_settings=plot_settings,
+    )
+
+
+@mcp.tool()
+async def kicad_export_board_dxf(
+    output_dir: str,
+    plot_graphic_items_using_contours: bool = False,
+    polygon_mode: bool = False,
+    units: int | str | None = None,
+    plot_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export the current board to DXF files inside output_dir."""
+
+    return await _run_client_tool(
+        "kicad_export_board_dxf",
+        "export_board_dxf",
+        output_dir=output_dir,
+        plot_graphic_items_using_contours=plot_graphic_items_using_contours,
+        polygon_mode=polygon_mode,
+        units=units,
+        plot_settings=plot_settings,
+    )
+
+
+@mcp.tool()
+async def kicad_export_board_pdf(
+    output_file: str,
+    include_metadata: bool = True,
+    single_document: bool = True,
+    background_color: str = "",
+    front_footprint_property_popups: bool = False,
+    back_footprint_property_popups: bool = False,
+    plot_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export the current board to one PDF file."""
+
+    return await _run_client_tool(
+        "kicad_export_board_pdf",
+        "export_board_pdf",
+        output_file=output_file,
+        include_metadata=include_metadata,
+        single_document=single_document,
+        background_color=background_color,
+        front_footprint_property_popups=front_footprint_property_popups,
+        back_footprint_property_popups=back_footprint_property_popups,
+        plot_settings=plot_settings,
+    )
+
+
+@mcp.tool()
+async def kicad_export_board_ps(
+    output_dir: str,
+    force_a4: bool = False,
+    use_global_settings: bool = False,
+    plot_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export the current board to PostScript files inside output_dir."""
+
+    return await _run_client_tool(
+        "kicad_export_board_ps",
+        "export_board_ps",
+        output_dir=output_dir,
+        force_a4=force_a4,
+        use_global_settings=use_global_settings,
+        plot_settings=plot_settings,
+    )
+
+
+@mcp.tool()
+async def kicad_export_gerbers(
+    output_dir: str,
+    create_gerber_job_file: bool = False,
+    use_x2_format: bool = True,
+    include_netlist_attributes: bool = True,
+    use_protel_file_extensions: bool = True,
+    disable_aperture_macros: bool = False,
+    precision: int | str | None = None,
+    plot_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export the current board to Gerber files inside output_dir."""
+
+    return await _run_client_tool(
+        "kicad_export_gerbers",
+        "export_gerbers",
+        output_dir=output_dir,
+        create_gerber_job_file=create_gerber_job_file,
+        use_x2_format=use_x2_format,
+        include_netlist_attributes=include_netlist_attributes,
+        use_protel_file_extensions=use_protel_file_extensions,
+        disable_aperture_macros=disable_aperture_macros,
+        precision=precision,
+        plot_settings=plot_settings,
+    )
+
+
+@mcp.tool()
+async def kicad_export_drill(
+    output_dir: str,
+    drill_format: int | str | None = None,
+    origin: int | str | None = None,
+    map_format: int | str | None = None,
+    report_filename: str = "",
+    route_oval_holes: bool = False,
+    mirror_y: bool = False,
+    generate_tenting: bool = False,
+) -> dict[str, Any]:
+    """Export NC drill files (Excellon or Gerber) inside output_dir."""
+
+    return await _run_client_tool(
+        "kicad_export_drill",
+        "export_drill",
+        output_dir=output_dir,
+        format=drill_format,
+        origin=origin,
+        map_format=map_format,
+        report_filename=report_filename,
+        route_oval_holes=route_oval_holes,
+        mirror_y=mirror_y,
+        generate_tenting=generate_tenting,
+    )
+
+
+@mcp.tool()
+async def kicad_export_position(
+    output_file: str,
+    settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export pick-and-place position files from the current board."""
+
+    return await _run_client_tool(
+        "kicad_export_position",
+        "export_position",
+        output_file=output_file,
+        settings=settings,
+    )
+
+
+@mcp.tool()
+async def kicad_export_gencad(
+    output_file: str,
+    flip_bottom_pads: bool = False,
+    use_individual_shapes: bool = False,
+    store_origin_coords: bool = False,
+    use_drill_origin: bool = False,
+    use_unique_pins: bool = False,
+) -> dict[str, Any]:
+    """Export the current board to GenCAD format."""
+
+    return await _run_client_tool(
+        "kicad_export_gencad",
+        "export_gencad",
+        output_file=output_file,
+        flip_bottom_pads=flip_bottom_pads,
+        use_individual_shapes=use_individual_shapes,
+        store_origin_coords=store_origin_coords,
+        use_drill_origin=use_drill_origin,
+        use_unique_pins=use_unique_pins,
+    )
+
+
+@mcp.tool()
+async def kicad_export_ipc2581(
+    output_file: str,
+    settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export the current board to IPC-2581 format."""
+
+    return await _run_client_tool(
+        "kicad_export_ipc2581",
+        "export_ipc2581",
+        output_file=output_file,
+        settings=settings,
+    )
+
+
+@mcp.tool()
+async def kicad_export_ipc_d356(output_file: str) -> dict[str, Any]:
+    """Export a board netlist in IPC-D-356 format."""
+
+    return await _run_client_tool(
+        "kicad_export_ipc_d356",
+        "export_ipc_d356",
+        output_file=output_file,
+    )
+
+
+@mcp.tool()
+async def kicad_export_odb(
+    output_dir: str,
+    drawing_sheet: str = "",
+    variant: str = "",
+    units: int | str | None = None,
+    precision: int = 6,
+    compression: int | str | None = None,
+) -> dict[str, Any]:
+    """Export the current board to ODB++ format inside output_dir."""
+
+    return await _run_client_tool(
+        "kicad_export_odb",
+        "export_odb",
+        output_dir=output_dir,
+        drawing_sheet=drawing_sheet,
+        variant=variant,
+        units=units,
+        precision=precision,
+        compression=compression,
+    )
+
+
+@mcp.tool()
+async def kicad_export_stats(
+    output_file: str,
+    output_format: int | str | None = None,
+    units: int | str | None = None,
+    exclude_footprints_without_pads: bool = False,
+    subtract_holes_from_board_area: bool = False,
+    subtract_holes_from_copper_areas: bool = False,
+) -> dict[str, Any]:
+    """Export board statistics such as component and copper area reports."""
+
+    return await _run_client_tool(
+        "kicad_export_stats",
+        "export_stats",
+        output_file=output_file,
+        format=output_format,
+        units=units,
+        exclude_footprints_without_pads=exclude_footprints_without_pads,
+        subtract_holes_from_board_area=subtract_holes_from_board_area,
+        subtract_holes_from_copper_areas=subtract_holes_from_copper_areas,
+    )
+
+
+@mcp.tool()
+async def kicad_export_3d(
+    output_file: str,
+    settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export the current board as a 3D model (STEP or STEPZ)."""
+
+    return await _run_client_tool(
+        "kicad_export_3d",
+        "export_3d",
+        output_file=output_file,
+        settings=settings,
+    )
+
+
+@mcp.tool()
+async def kicad_export_render(
+    output_file: str,
+    settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Export a raytraced 3D render of the current board."""
+
+    return await _run_client_tool(
+        "kicad_export_render",
+        "export_render",
+        output_file=output_file,
+        settings=settings,
+    )
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0: board design rules, embedded files and netlist import
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def kicad_get_design_rules() -> dict[str, Any]:
+    """Return board design rules: minimum constraints, predefined sizes, DRC severities."""
+
+    return await _run_client_tool("kicad_get_design_rules", "get_design_rules")
+
+
+@mcp.tool()
+async def kicad_set_design_rules(
+    rules: dict[str, Any],
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Update board design rules by merging the given fields into the current rules."""
+
+    return await _run_client_tool(
+        "kicad_set_design_rules",
+        "set_design_rules",
+        rules,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_get_custom_design_rules() -> dict[str, Any]:
+    """Return parsed custom design rules (KiCad .kicad_dru content) and their parse status."""
+
+    return await _run_client_tool("kicad_get_custom_design_rules", "get_custom_design_rules")
+
+
+@mcp.tool()
+async def kicad_set_custom_design_rules(
+    rules: list[dict[str, Any]],
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Replace custom design rules with structured rule objects; an empty list clears them."""
+
+    return await _run_client_tool(
+        "kicad_set_custom_design_rules",
+        "set_custom_design_rules",
+        rules,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_get_embedded_files(include_data: bool = False) -> dict[str, Any]:
+    """List files embedded in the current board (fonts, 3D models, datasheets)."""
+
+    return await _run_client_tool(
+        "kicad_get_embedded_files",
+        "get_embedded_files",
+        include_data=include_data,
+    )
+
+
+@mcp.tool()
+async def kicad_add_embedded_files(
+    paths: list[str],
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Embed one or more local files into the current board."""
+
+    return await _run_client_tool(
+        "kicad_add_embedded_files",
+        "add_embedded_files",
+        paths,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_set_embedded_files(
+    paths: list[str],
+    dry_run: bool = False,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Replace all embedded files of the current board with the given local files."""
+
+    return await _run_client_tool(
+        "kicad_set_embedded_files",
+        "set_embedded_files",
+        paths,
+        dry_run=dry_run,
+        force=force,
+    )
+
+
+@mcp.tool()
+async def kicad_import_netlist(
+    netlist_path: str,
+    match_mode: int | str = "uuid",
+    delete_extra_footprints: bool = True,
+    update_footprints: bool = True,
+    transfer_groups: bool = True,
+    override_locks: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Import a schematic netlist file into the current board (forward annotation)."""
+
+    return await _run_client_tool(
+        "kicad_import_netlist",
+        "import_netlist",
+        netlist_path,
+        match_mode=match_mode,
+        delete_extra_footprints=delete_extra_footprints,
+        update_footprints=update_footprints,
+        transfer_groups=transfer_groups,
+        override_locks=override_locks,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_get_bounding_box(
+    item_ids: list[str],
+    include_text: bool = False,
+) -> dict[str, Any]:
+    """Compute KiCad-side bounding boxes for the given board item IDs."""
+
+    return await _run_client_tool(
+        "kicad_get_bounding_box",
+        "get_bounding_box",
+        item_ids,
+        include_text=include_text,
+    )
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0: schematic document lifecycle
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def kicad_sch_save_as(
+    filename: str,
+    overwrite: bool = False,
+    include_project: bool = True,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Save a copy of the current schematic to a new file without opening it."""
+
+    return await _run_client_tool(
+        "kicad_sch_save_as",
+        "save_schematic_as",
+        filename,
+        overwrite=overwrite,
+        include_project=include_project,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_revert(
+    dry_run: bool = False,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Revert the current schematic to the last saved state, discarding pending changes."""
+
+    return await _run_client_tool(
+        "kicad_sch_revert",
+        "revert_schematic",
+        dry_run=dry_run,
+        force=force,
+    )
+
+
 def main() -> None:
     """Run the MCP server over stdio."""
 
