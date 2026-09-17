@@ -21,6 +21,42 @@ try:
         schematic_types_pb2 as KiCadSchematicProto,
     )
     from kipy.schematic_types import (  # type: ignore[import-not-found]
+        BusEntry as KiCadBusEntry,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        DirectiveLabel as KiCadDirectiveLabel,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        Group as KiCadSchematicGroup,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SchematicField as KiCadSchematicField,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SchematicGraphicShape as KiCadSchematicGraphicShape,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SchematicImage as KiCadSchematicImage,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SchematicPin as KiCadSchematicPin,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SchematicRuleArea as KiCadSchematicRuleArea,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SchematicTable as KiCadSchematicTable,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SchematicTextBox as KiCadSchematicTextBox,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SheetPin as KiCadSheetPin,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
+        SheetSymbol as KiCadSheetSymbol,
+    )
+    from kipy.schematic_types import (  # type: ignore[import-not-found]
         GlobalLabel as KiCadGlobalLabel,
     )
     from kipy.schematic_types import (  # type: ignore[import-not-found]
@@ -49,15 +85,27 @@ except ModuleNotFoundError:  # pragma: no cover - depends on local environment
     KiCadLibraryIdentifier = None
     KiCadText = None
     KiCadSchematicProto = None
+    KiCadBusEntry = None
+    KiCadDirectiveLabel = None
     KiCadGlobalLabel = None
     KiCadHierarchicalLabel = None
     KiCadJunction = None
     KiCadLocalLabel = None
     KiCadNoConnectMarker = None
+    KiCadSchematicField = None
+    KiCadSchematicGraphicShape = None
+    KiCadSchematicGroup = None
+    KiCadSchematicImage = None
     KiCadSchematicLine = None
+    KiCadSchematicPin = None
+    KiCadSchematicRuleArea = None
     KiCadSchematicSymbol = None
     KiCadSchematicSymbolInstance = None
+    KiCadSchematicTable = None
+    KiCadSchematicTextBox = None
     KiCadSchematicText = None
+    KiCadSheetPin = None
+    KiCadSheetSymbol = None
 
 DEFAULT_SCHEMATIC_NETLIST_FORMAT = 2
 
@@ -136,6 +184,39 @@ SCH_UPDATABLE_FIELDS = (
     "diameter_mm",
     "locked",
 )
+SCH_READ_ONLY_ITEM_KINDS = (
+    "sheet",
+    "sheet_pin",
+    "image",
+    "shape",
+    "bus_entry",
+    "rule_area",
+    "table",
+    "group",
+    "text_box",
+    "directive_label",
+    "field",
+    "pin",
+)
+SCH_READ_ITEM_KINDS = SCH_CREATE_ITEM_KINDS + SCH_READ_ONLY_ITEM_KINDS
+SCH_READ_ONLY_ITEM_TYPES = {
+    "sheet": KiCadSheetSymbol,
+    "sheet_pin": KiCadSheetPin,
+    "image": KiCadSchematicImage,
+    "shape": KiCadSchematicGraphicShape,
+    "bus_entry": KiCadBusEntry,
+    "rule_area": KiCadSchematicRuleArea,
+    "table": KiCadSchematicTable,
+    "group": KiCadSchematicGroup,
+    "text_box": KiCadSchematicTextBox,
+    "directive_label": KiCadDirectiveLabel,
+    "field": KiCadSchematicField,
+    "pin": KiCadSchematicPin,
+}
+SCH_ALL_ITEM_TYPES = {
+    **SCH_READ_ONLY_ITEM_TYPES,
+    **SCH_CREATABLE_ITEM_TYPES,
+}
 
 
 class KiCadSchematicClientMixin:
@@ -531,6 +612,49 @@ class KiCadSchematicClientMixin:
             dry_run=dry_run,
         )
 
+    async def save_schematic_as(
+        self,
+        filename: str,
+        *,
+        overwrite: bool = False,
+        include_project: bool = True,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Save a copy of the current schematic to a new file without opening it."""
+
+        return await self._run_schematic_command(
+            lambda schematic, is_dry_run: self._save_schematic_as(
+                schematic,
+                filename=filename,
+                overwrite=bool(overwrite),
+                include_project=bool(include_project),
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to save a copy of the current schematic through the IPC API.",
+            mutation_name="sch_save_as",
+            dry_run=dry_run,
+        )
+
+    async def revert_schematic(
+        self,
+        *,
+        dry_run: bool = False,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Revert the current schematic to the last saved state, discarding pending changes."""
+
+        return await self._run_schematic_command(
+            lambda schematic, is_dry_run: self._revert_schematic(
+                schematic,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to revert the current schematic through the IPC API.",
+            mutation_name="sch_revert",
+            dry_run=dry_run,
+            dangerous=True,
+            force=force,
+        )
+
     async def get_schematic_items(
         self,
         *,
@@ -844,9 +968,11 @@ class KiCadSchematicClientMixin:
         default_message: str,
         mutation_name: str,
         dry_run: bool = False,
+        dangerous: bool = False,
+        force: bool = False,
     ) -> dict[str, Any]:
         try:
-            self._assert_mutation_allowed(dry_run=dry_run, dangerous=False, force=False)
+            self._assert_mutation_allowed(dry_run=dry_run, dangerous=dangerous, force=force)
             return await asyncio.to_thread(
                 self._execute_schematic_command,
                 operation,
@@ -2095,6 +2221,61 @@ class KiCadSchematicClientMixin:
 
         return {"schematic": self._serialize_schematic(schematic)}
 
+    def _save_schematic_as(
+        self,
+        schematic: Any,
+        *,
+        filename: str,
+        overwrite: bool,
+        include_project: bool,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        normalized_filename = str(filename or "").strip()
+        if not normalized_filename:
+            raise KiCadLookupError("filename must be a non-empty target path.")
+
+        target = Path(normalized_filename)
+        if not dry_run:
+            save_as = getattr(schematic, "save_as", None)
+            if not callable(save_as):
+                raise KiCadCapabilityError(
+                    "The active KiCad schematic does not expose save_as(). "
+                    "A KiCad 11 or newer schematic endpoint is required."
+                )
+            if target.exists() and not overwrite:
+                raise KiCadLookupError(
+                    f"{normalized_filename} already exists. Re-run with overwrite=True to replace it."
+                )
+            save_as(normalized_filename, overwrite=overwrite, include_project=include_project)
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "filename": normalized_filename,
+            "overwrite": overwrite,
+            "include_project": include_project,
+            "exists": target.exists(),
+        }
+
+    def _revert_schematic(self, schematic: Any, *, dry_run: bool) -> dict[str, Any]:
+        is_modified = None
+        is_document_modified = getattr(schematic, "is_document_modified", None)
+        if callable(is_document_modified):
+            is_modified = bool(is_document_modified())
+
+        if not dry_run:
+            revert = getattr(schematic, "revert", None)
+            if not callable(revert):
+                raise KiCadCapabilityError(
+                    "The active KiCad schematic does not expose revert(). "
+                    "A KiCad 11 or newer schematic endpoint is required."
+                )
+            revert()
+
+        return {
+            "schematic": self._serialize_schematic(schematic),
+            "was_modified": is_modified,
+        }
+
     # ------------------------------------------------------------------
     # Additional read helpers
     # ------------------------------------------------------------------
@@ -2166,17 +2347,17 @@ class KiCadSchematicClientMixin:
             value = str(kind).strip().lower()
             if not value:
                 continue
-            if value not in SCH_CREATE_ITEM_KINDS:
+            if value not in SCH_READ_ITEM_KINDS:
                 raise KiCadLookupError(
                     f"Unsupported schematic item kind {kind!r}. "
-                    f"Supported kinds: {', '.join(SCH_CREATE_ITEM_KINDS)}."
+                    f"Supported kinds: {', '.join(SCH_READ_ITEM_KINDS)}."
                 )
             normalized.add(value)
 
         return normalized or None
 
     def _schematic_item_kind(self, item: Any) -> str | None:
-        for kind, item_type in SCH_CREATABLE_ITEM_TYPES.items():
+        for kind, item_type in SCH_ALL_ITEM_TYPES.items():
             if item_type is not None and isinstance(item, item_type):
                 return kind
         return None

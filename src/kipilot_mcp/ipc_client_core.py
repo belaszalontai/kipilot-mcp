@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
 from .config import KiCadIpcConfig
@@ -104,6 +105,10 @@ BOARD_ITEM_GETTER_NAMES = (
     "get_barcodes",
     "get_reference_images",
     "get_groups",
+    "get_tables",
+    "get_grid_items",
+    "get_constraints",
+    "get_reference_points",
 )
 BOARD_ITEM_KIND_GETTERS = {
     "footprint": "get_footprints",
@@ -128,6 +133,14 @@ BOARD_ITEM_KIND_GETTERS = {
     "reference_images": "get_reference_images",
     "group": "get_groups",
     "groups": "get_groups",
+    "table": "get_tables",
+    "tables": "get_tables",
+    "grid_item": "get_grid_items",
+    "grid_items": "get_grid_items",
+    "constraint": "get_constraints",
+    "constraints": "get_constraints",
+    "reference_point": "get_reference_points",
+    "reference_points": "get_reference_points",
 }
 
 logger = logging.getLogger(__name__)
@@ -137,6 +150,7 @@ try:
     from kipy.board_types import to_concrete_board_shape as kipy_to_concrete_board_shape  # type: ignore[import-not-found]
     from kipy.board_types import Track as KiCadTrack  # type: ignore[import-not-found]
     from kipy.board_types import Via as KiCadVia  # type: ignore[import-not-found]
+    from kipy.common_types import PathType as KiCadPathType  # type: ignore[import-not-found]
     from kipy.errors import ApiError  # type: ignore[import-not-found]
     from kipy.errors import FutureVersionError as KiCadFutureVersionError  # type: ignore[import-not-found]
     from kipy.geometry import (
@@ -145,17 +159,26 @@ try:
     from kipy.geometry import PolyLine as KiCadPolyLine  # type: ignore[import-not-found]
     from kipy.geometry import PolyLineNode as KiCadPolyLineNode  # type: ignore[import-not-found]
     from kipy.geometry import Vector2 as KiCadVector2  # type: ignore[import-not-found]
+    from kipy.proto.common.types import DocumentSpecifier as KiCadDocumentSpecifier  # type: ignore[import-not-found]
     from kipy.proto.common.types import DocumentType as KiCadDocumentType  # type: ignore[import-not-found]
+    from kipy.proto.common.types import (
+        project_settings_pb2 as KiCadProjectSettingsProto,
+    )  # type: ignore[import-not-found]
+    from kipy.project_types import NetClass as KiCadNetClass  # type: ignore[import-not-found]
 except ModuleNotFoundError as exc:  # pragma: no cover - depends on local environment
     KiCad = None
     KiCadTrack = None
     KiCadVia = None
     kipy_to_concrete_board_shape = None
+    KiCadPathType = None
     KiCadPolyLine = None
     KiCadPolyLineNode = None
     KiCadPolygonWithHoles = None
     KiCadVector2 = None
+    KiCadDocumentSpecifier = None
     KiCadDocumentType = None
+    KiCadProjectSettingsProto = None
+    KiCadNetClass = None
 
     class ApiError(RuntimeError):
         """Fallback API error used when kicad-python is unavailable."""
@@ -167,10 +190,31 @@ except ModuleNotFoundError as exc:  # pragma: no cover - depends on local enviro
 else:
     _KIPY_IMPORT_ERROR = None
 
+try:  # pragma: no cover - protobuf ships with kicad-python
+    from google.protobuf.json_format import MessageToDict as _message_to_dict
+    from google.protobuf.json_format import ParseDict as _parse_dict
+except ModuleNotFoundError:  # pragma: no cover - depends on local environment
+    _message_to_dict = None
+    _parse_dict = None
+
 
 DOCUMENT_TYPE_SCHEMATIC = int(getattr(KiCadDocumentType, "DOCTYPE_SCHEMATIC", 1))
 DOCUMENT_TYPE_PCB = int(getattr(KiCadDocumentType, "DOCTYPE_PCB", 3))
 DOCUMENT_TYPE_PROJECT = int(getattr(KiCadDocumentType, "DOCTYPE_PROJECT", 6))
+DOCUMENT_TYPE_ALIASES = {
+    "board": "DOCTYPE_PCB",
+    "pcb": "DOCTYPE_PCB",
+    "schematic": "DOCTYPE_SCHEMATIC",
+    "sch": "DOCTYPE_SCHEMATIC",
+    "project": "DOCTYPE_PROJECT",
+    "proj": "DOCTYPE_PROJECT",
+    "footprint": "DOCTYPE_FOOTPRINT",
+    "fp": "DOCTYPE_FOOTPRINT",
+    "symbol": "DOCTYPE_SYMBOL",
+    "sym": "DOCTYPE_SYMBOL",
+}
+PROJECT_MERGE_MODE_MERGE = 1
+PROJECT_MERGE_MODE_REPLACE = 2
 
 
 class KiCadIpcClientCore:
@@ -281,6 +325,145 @@ class KiCadIpcClientCore:
             self._get_project_net_classes,
             default_message="Unable to read project net classes through the IPC API.",
         )
+
+    async def set_project_net_classes(
+        self,
+        net_classes: Sequence[dict[str, Any]],
+        *,
+        merge_mode: str = "merge",
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Create or update project net classes (rules such as widths and clearances)."""
+
+        return await self._run_project_write(
+            lambda project, is_dry_run: self._set_project_net_classes(
+                project,
+                net_classes=net_classes,
+                merge_mode=merge_mode,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to update project net classes through the IPC API.",
+            mutation_name="set_project_net_classes",
+            dry_run=dry_run,
+        )
+
+    async def get_paths(self) -> dict[str, Any]:
+        """Return KiCad's well-known filesystem paths (library, template, plugin roots)."""
+
+        return await self._run_kicad(
+            self._get_paths,
+            default_message="Unable to read KiCad filesystem paths through the IPC API.",
+        )
+
+    async def get_kicad_binary_path(self, binary_name: str) -> dict[str, Any]:
+        """Resolve the absolute path of a KiCad binary such as kicad-cli."""
+
+        return await self._run_kicad(
+            lambda kicad: self._get_kicad_binary_path(kicad, binary_name),
+            default_message="Unable to resolve the requested KiCad binary path through the IPC API.",
+        )
+
+    async def get_plugin_settings_path(self, identifier: str) -> dict[str, Any]:
+        """Return a per-plugin writable settings directory recommended by KiCad."""
+
+        return await self._run_kicad(
+            lambda kicad: self._get_plugin_settings_path(kicad, identifier),
+            default_message="Unable to resolve the KiCad plugin settings path through the IPC API.",
+        )
+
+    async def run_action(self, action: str, *, dry_run: bool = False) -> dict[str, Any]:
+        """Run a KiCad TOOL_ACTION by name against the active editor window."""
+
+        return await self._run_kicad_write(
+            lambda kicad, is_dry_run: self._run_action(kicad, action, is_dry_run),
+            default_message="Unable to run the requested KiCad action through the IPC API.",
+            mutation_name="run_action",
+            dry_run=dry_run,
+        )
+
+    async def open_document(
+        self,
+        path: str,
+        document_type: int | str,
+        *,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Open a document in a headless KiCad API server session."""
+
+        return await self._run_kicad_write(
+            lambda kicad, is_dry_run: self._open_document(
+                kicad,
+                path=path,
+                document_type=document_type,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to open the requested KiCad document through the IPC API.",
+            mutation_name="open_document",
+            dry_run=dry_run,
+        )
+
+    async def create_document(
+        self,
+        path: str,
+        document_type: int | str,
+        *,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Create a new in-memory document in a headless KiCad API server session."""
+
+        return await self._run_kicad_write(
+            lambda kicad, is_dry_run: self._create_document(
+                kicad,
+                path=path,
+                document_type=document_type,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to create the requested KiCad document through the IPC API.",
+            mutation_name="create_document",
+            dry_run=dry_run,
+        )
+
+    async def close_document(
+        self,
+        path: str,
+        document_type: int | str,
+        *,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Close an open document in a headless KiCad API server session."""
+
+        return await self._run_kicad_write(
+            lambda kicad, is_dry_run: self._close_document(
+                kicad,
+                path=path,
+                document_type=document_type,
+                dry_run=is_dry_run,
+            ),
+            default_message="Unable to close the requested KiCad document through the IPC API.",
+            mutation_name="close_document",
+            dry_run=dry_run,
+        )
+
+    async def _run_kicad_write(
+        self,
+        operation: Callable[[Any, bool], dict[str, Any]],
+        *,
+        default_message: str,
+        mutation_name: str,
+        dry_run: bool = False,
+        dangerous: bool = False,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        try:
+            self._assert_mutation_allowed(dry_run=dry_run, dangerous=dangerous, force=force)
+            return await asyncio.to_thread(
+                self._with_kicad_write,
+                operation,
+                mutation_name,
+                dry_run,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return self._translate_error(exc, default_message=default_message)
 
     async def _run_kicad(
         self,
@@ -417,6 +600,21 @@ class KiCadIpcClientCore:
         dry_run: bool,
     ) -> dict[str, Any]:
         result = self._with_project(lambda project: operation(project, dry_run))
+        return {
+            "ok": True,
+            "mutation": mutation_name,
+            "dry_run": dry_run,
+            "commit_message": None,
+            **result,
+        }
+
+    def _with_kicad_write(
+        self,
+        operation: Callable[[Any, bool], dict[str, Any]],
+        mutation_name: str,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        result = self._with_kicad(lambda kicad: operation(kicad, dry_run))
         return {
             "ok": True,
             "mutation": mutation_name,
@@ -658,6 +856,353 @@ class KiCadIpcClientCore:
             "count": len(net_classes),
             "net_classes": [serialize_net_class(net_class) for net_class in net_classes],
         }
+
+    def _set_project_net_classes(
+        self,
+        project: Any,
+        *,
+        net_classes: Sequence[dict[str, Any]],
+        merge_mode: str,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        get_net_classes = getattr(project, "get_net_classes", None)
+        set_net_classes = getattr(project, "set_net_classes", None)
+
+        if not callable(get_net_classes):
+            raise KiCadCapabilityError(
+                "This KiCad binding does not expose project net classes on the active endpoint."
+            )
+        if not callable(set_net_classes) and not dry_run:
+            raise KiCadCapabilityError(
+                "This KiCad binding does not expose project net-class updates on the active endpoint."
+            )
+
+        requested_net_classes = self._build_net_class_wrappers(net_classes)
+        resolved_merge_mode, resolved_merge_mode_name = self._resolve_project_merge_mode(merge_mode)
+        previous_net_classes = self._get_project_net_class_items(project)
+
+        if not dry_run:
+            set_net_classes(requested_net_classes, resolved_merge_mode)
+
+        applied_net_classes = (
+            previous_net_classes if dry_run else self._get_project_net_class_items(project)
+        )
+        return {
+            "project": serialize_project(project),
+            "merge_mode": resolved_merge_mode_name,
+            "previous_count": len(previous_net_classes),
+            "requested_count": len(requested_net_classes),
+            "requested_net_classes": [
+                serialize_net_class(net_class) for net_class in requested_net_classes
+            ],
+            "count": len(applied_net_classes),
+            "net_classes": [serialize_net_class(net_class) for net_class in applied_net_classes],
+        }
+
+    def _build_net_class_wrappers(self, net_classes: Sequence[dict[str, Any]]) -> list[Any]:
+        if KiCadNetClass is None or KiCadProjectSettingsProto is None:
+            raise KiCadBindingUnavailableError(
+                "The kicad-python binding does not expose net class wrappers. "
+                "kicad-python 0.9 or newer is required for net class updates."
+            )
+        if _parse_dict is None:
+            raise KiCadBindingUnavailableError(
+                "The protobuf runtime is missing, so net class payloads cannot be parsed."
+            )
+
+        specs = list(net_classes or [])
+        if not specs:
+            raise KiCadLookupError("net_classes must contain at least one net class definition.")
+
+        wrappers: list[Any] = []
+        for index, spec in enumerate(specs):
+            if not isinstance(spec, dict):
+                raise KiCadLookupError(
+                    f"net_classes[{index}] must be an object containing net class fields."
+                )
+
+            proto = KiCadProjectSettingsProto.NetClass()
+            try:
+                _parse_dict(spec, proto)
+            except Exception as exc:  # noqa: BLE001
+                raise KiCadLookupError(
+                    f"net_classes[{index}] could not be parsed as a KiCad net class: {exc}"
+                ) from exc
+
+            if not str(proto.name).strip():
+                raise KiCadLookupError(f"net_classes[{index}] must define a non-empty 'name'.")
+
+            wrappers.append(KiCadNetClass(proto))
+
+        return wrappers
+
+    def _get_paths(self, kicad: Any) -> dict[str, Any]:
+        get_paths = getattr(kicad, "get_paths", None)
+        if not callable(get_paths):
+            raise KiCadCapabilityError(
+                "The active KiCad endpoint does not expose get_paths(). "
+                "A KiCad 11 or newer endpoint is required."
+            )
+
+        resolved_paths = {
+            self._path_type_name(key): str(value) for key, value in dict(get_paths()).items()
+        }
+        return {"ok": True, "count": len(resolved_paths), "paths": resolved_paths}
+
+    def _path_type_name(self, key: Any) -> str:
+        if KiCadPathType is not None:
+            try:
+                return str(KiCadPathType.Name(int(key)))
+            except Exception:  # noqa: BLE001
+                pass
+
+        return str(key)
+
+    def _get_kicad_binary_path(self, kicad: Any, binary_name: str) -> dict[str, Any]:
+        get_binary_path = getattr(kicad, "get_kicad_binary_path", None)
+        if not callable(get_binary_path):
+            raise KiCadCapabilityError(
+                "The active KiCad endpoint does not expose get_kicad_binary_path()."
+            )
+
+        requested_name = str(binary_name or "").strip()
+        if not requested_name:
+            raise KiCadLookupError(
+                "binary_name must be a non-empty KiCad binary name such as 'kicad-cli'."
+            )
+
+        resolved_path = str(get_binary_path(requested_name))
+        return {
+            "ok": True,
+            "binary_name": requested_name,
+            "path": resolved_path,
+            "exists": Path(resolved_path).is_file() if resolved_path else False,
+        }
+
+    def _get_plugin_settings_path(self, kicad: Any, identifier: str) -> dict[str, Any]:
+        get_plugin_settings_path = getattr(kicad, "get_plugin_settings_path", None)
+        if not callable(get_plugin_settings_path):
+            raise KiCadCapabilityError(
+                "The active KiCad endpoint does not expose get_plugin_settings_path()."
+            )
+
+        requested_identifier = str(identifier or "").strip()
+        if not requested_identifier:
+            raise KiCadLookupError(
+                "identifier must be a non-empty plugin identifier such as 'org.kicad.myplugin'."
+            )
+
+        resolved_path = str(get_plugin_settings_path(requested_identifier))
+        return {
+            "ok": True,
+            "identifier": requested_identifier,
+            "path": resolved_path,
+            "exists": Path(resolved_path).exists() if resolved_path else False,
+        }
+
+    def _run_action(self, kicad: Any, action: str, dry_run: bool) -> dict[str, Any]:
+        run_action = getattr(kicad, "run_action", None)
+        if not callable(run_action):
+            raise KiCadCapabilityError(
+                "The active KiCad endpoint does not expose run_action()."
+            )
+
+        requested_action = str(action or "").strip()
+        if not requested_action:
+            raise KiCadLookupError(
+                "action must be a non-empty KiCad TOOL_ACTION name, "
+                "for example 'pcbnew.EditorControl.zoneFillAll'."
+            )
+
+        if dry_run:
+            return {
+                "action": requested_action,
+                "status": None,
+                "status_name": None,
+                "executed": False,
+            }
+
+        response = run_action(requested_action)
+        status = getattr(response, "status", None)
+        return {
+            "action": requested_action,
+            "status": self._enum_int_value(status),
+            "status_name": None if status is None else str(status),
+            "executed": True,
+        }
+
+    def _enum_int_value(self, value: Any) -> int | None:
+        if value is None:
+            return None
+
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _open_document(
+        self,
+        kicad: Any,
+        *,
+        path: str,
+        document_type: int | str,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        open_document = getattr(kicad, "open_document", None)
+        if not callable(open_document):
+            raise KiCadCapabilityError(
+                "The active KiCad endpoint does not expose open_document(). Document lifecycle "
+                "commands are only available in a headless KiCad API server session."
+            )
+
+        resolved_path = self._require_document_path(path)
+        resolved_type, resolved_type_name = self._resolve_document_type(document_type)
+
+        if dry_run:
+            return {
+                "path": resolved_path,
+                "document_type": resolved_type,
+                "document_type_name": resolved_type_name,
+                "document": None,
+            }
+
+        document = open_document(resolved_path, resolved_type)
+        return {
+            "path": resolved_path,
+            "document_type": resolved_type,
+            "document_type_name": resolved_type_name,
+            "document": serialize_document(document),
+        }
+
+    def _create_document(
+        self,
+        kicad: Any,
+        *,
+        path: str,
+        document_type: int | str,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        create_document = getattr(kicad, "create_document", None)
+        if not callable(create_document):
+            raise KiCadCapabilityError(
+                "The active KiCad endpoint does not expose create_document(). Document lifecycle "
+                "commands are only available in a headless KiCad API server session."
+            )
+
+        resolved_path = self._require_document_path(path)
+        resolved_type, resolved_type_name = self._resolve_document_type(document_type)
+
+        if dry_run:
+            return {
+                "path": resolved_path,
+                "document_type": resolved_type,
+                "document_type_name": resolved_type_name,
+                "document": None,
+            }
+
+        document = create_document(resolved_path, resolved_type)
+        return {
+            "path": resolved_path,
+            "document_type": resolved_type,
+            "document_type_name": resolved_type_name,
+            "document": serialize_document(document),
+        }
+
+    def _close_document(
+        self,
+        kicad: Any,
+        *,
+        path: str,
+        document_type: int | str,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        close_document = getattr(kicad, "close_document", None)
+        if not callable(close_document):
+            raise KiCadCapabilityError(
+                "The active KiCad endpoint does not expose close_document(). Document lifecycle "
+                "commands are only available in a headless KiCad API server session."
+            )
+
+        resolved_path = self._require_document_path(path)
+        resolved_type, resolved_type_name = self._resolve_document_type(document_type)
+        specifier = self._build_document_specifier(resolved_path, resolved_type)
+
+        if not dry_run:
+            close_document(specifier)
+
+        return {
+            "path": resolved_path,
+            "document_type": resolved_type,
+            "document_type_name": resolved_type_name,
+            "specifier": serialize_document(specifier),
+        }
+
+    def _require_document_path(self, path: str) -> str:
+        resolved_path = str(path or "").strip()
+        if not resolved_path:
+            raise KiCadLookupError("path must be a non-empty document path.")
+
+        return resolved_path
+
+    def _build_document_specifier(self, path: str, document_type: int) -> Any:
+        if KiCadDocumentSpecifier is None:
+            raise KiCadBindingUnavailableError(
+                "The kicad-python binding is not installed in this Python environment, "
+                "so document specifiers cannot be built."
+            )
+
+        target = Path(path)
+        specifier = KiCadDocumentSpecifier()
+        specifier.type = document_type
+
+        if document_type == DOCUMENT_TYPE_PCB:
+            specifier.board_filename = target.name
+        else:
+            specifier.project.name = target.stem
+            specifier.project.path = str(target.parent)
+
+        return specifier
+
+    def _resolve_document_type(self, document_type: int | str) -> tuple[int, str]:
+        if KiCadDocumentType is None:
+            raise KiCadBindingUnavailableError(
+                "The kicad-python binding is not installed in this Python environment."
+            )
+
+        if isinstance(document_type, bool):
+            raise KiCadLookupError("document_type must be a name or numeric DocumentType value.")
+
+        if isinstance(document_type, int):
+            return document_type, self._document_type_name(document_type) or str(document_type)
+
+        normalized = str(document_type or "").strip().lower()
+        attribute = DOCUMENT_TYPE_ALIASES.get(normalized)
+        if attribute is None:
+            raise KiCadLookupError(
+                "document_type must be one of: pcb, schematic, project, footprint, symbol."
+            )
+
+        value = getattr(KiCadDocumentType, attribute, None)
+        if value is None:
+            raise KiCadLookupError(f"This KiCad binding does not define {attribute}.")
+
+        return int(value), normalized
+
+    def _document_type_name(self, document_type: int) -> str | None:
+        if KiCadDocumentType is None:
+            return None
+
+        for attribute, name in (
+            ("DOCTYPE_PCB", "pcb"),
+            ("DOCTYPE_SCHEMATIC", "schematic"),
+            ("DOCTYPE_PROJECT", "project"),
+            ("DOCTYPE_FOOTPRINT", "footprint"),
+            ("DOCTYPE_SYMBOL", "symbol"),
+        ):
+            if int(getattr(KiCadDocumentType, attribute, -1)) == document_type:
+                return name
+
+        return None
 
     def _set_text_item_value(self, item: Any, value: str) -> None:
         try:

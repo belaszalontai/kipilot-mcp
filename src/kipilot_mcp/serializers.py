@@ -8,6 +8,14 @@ from typing import Any
 
 NANOMETERS_PER_MILLIMETER = 1_000_000
 PROTOBUF_VALUE_PATTERN = re.compile(r'^value:\s*"(?P<value>.+)"$', re.DOTALL)
+GENERIC_BOARD_ITEM_TYPE_NAMES = frozenset(
+    {
+        "Table",
+        "GridItem",
+        "Constraint",
+        "ReferencePoint",
+    }
+)
 
 
 def nanometers_to_millimeters(value: int | float | None) -> float | None:
@@ -907,7 +915,32 @@ def serialize_identifier(value: Any) -> str:
     return text
 
 
+def serialize_generic_board_item(item: Any, board: Any | None = None) -> dict[str, Any]:
+    """Serialize board item types that do not have a dedicated serializer."""
+    result: dict[str, Any] = {
+        "id": serialize_identifier(getattr(item, "id", "")),
+        "kind": type(item).__name__,
+        "layer": serialize_layer(getattr(item, "layer", None), board),
+        "locked": getattr(item, "locked", None),
+        "bounding_box": serialize_box(_maybe_call(item, "bounding_box")),
+    }
+
+    position = serialize_vector(getattr(item, "position", None))
+    if position is not None:
+        result["position"] = position
+
+    for key in ("name", "text", "value"):
+        value = getattr(item, key, None)
+        if isinstance(value, (str, int, float, bool)):
+            result[key] = value
+
+    return result
+
+
 def serialize_item(item: Any, board: Any | None = None) -> dict[str, Any]:
+    if type(item).__name__ in GENERIC_BOARD_ITEM_TYPE_NAMES:
+        return serialize_generic_board_item(item, board)
+
     if hasattr(item, "reference_field"):
         result = serialize_footprint(item, board)
         result["kind"] = type(item).__name__
