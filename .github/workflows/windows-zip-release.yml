@@ -15,11 +15,13 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      # The hosted runners already force Node 24 and drop Node 20 on 2026-09-23, so
+      # every action below has to ship a node24 runtime (major tag v7).
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           architecture: "x64"
@@ -32,14 +34,31 @@ jobs:
         run: .\build-windows-zip.ps1 -ForceInstall -Clean -ForceBindingInstall
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kipilot-mcp-windows-zip
           path: artifacts/*.zip
           if-no-files-found: error
 
+      # Attach through the GitHub CLI instead of softprops/action-gh-release: the
+      # action uploads through the Node HTTP stack, which aborted the v0.3.0 attach
+      # step after ~10 minutes with "Headers Timeout Error".
       - name: Attach ZIP to GitHub release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/*.zip
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.event.release.tag_name }}"
+          $assets = @(Get-ChildItem -Path artifacts -Filter *.zip | ForEach-Object FullName)
+          if ($assets.Count -eq 0) { throw "No ZIP found under artifacts/." }
+          gh release upload $tag @assets --clobber
+
+      - name: Confirm the release asset
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.event.release.tag_name }}"
+          gh release view $tag --json assets --jq '.assets[].name'

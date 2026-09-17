@@ -48,3 +48,11 @@ Use this checklist when publishing a Windows executable release.
   report 135 tools (`python scripts/smoke_test_binary.py <extracted>/kipilot-mcp.exe`).
 - Start KiCad, point an MCP host at `kipilot-mcp.exe`, and run `ping_kicad`.
 - Verify logs still go to `stderr` or the configured log file, never to `stdout`.
+
+## Troubleshooting
+
+- **The workflow fails at "Attach ZIP to GitHub release".** The ZIP is still safe as the run's
+  `kipilot-mcp-windows-zip` artifact. Attach it by hand with
+  `gh release upload <tag> artifacts/*.zip --clobber`, or re-run the failed jobs of the
+  release-triggered run: the workflow uploads through `gh release upload`, so a re-run can simply
+  retry it. A plain `workflow_dispatch` run never touches the release.
