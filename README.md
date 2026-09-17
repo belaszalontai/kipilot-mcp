@@ -16,33 +16,6 @@ Usage videos are available at [kipilot.org/galery.html](https://kipilot.org/gale
 
 Public project documentation is available at [kipilot.org/docs.html](https://kipilot.org/docs.html).
 
-## What's New In 0.3.1
-
-The 0.3.1 release fixes the downloadable Windows ZIP artifact of 0.3.0:
-
-- **Start-up crash fixed** — the optional `kicad-python` imports now tolerate bindings that miss
-  individual names (`ImportError`) and not just missing modules (`ModuleNotFoundError`). A binding
-  without `kipy.common_types.PathType` no longer stops the server; only the tools that need the
-  missing symbol report a capability error. Each optional symbol is imported on its own, so a single
-  missing name no longer disables the other bindings.
-- **Replaced release artifact** — the 0.3.0 Windows ZIP bundled the PyPI `kicad-python` 0.8.0 wheel,
-  which ships inconsistent generated protos: `kipy.board_jobs`, `kipy.board_rules`, `kipy.schematic`,
-  and `kipy.schematic_types` cannot be imported at all in that release, so the packaged server
-  crashed before any tool could run.
-- **Reproducible binding for packaging** — the release build now installs a prepared binding wheel
-  (`vendor/kicad_python-<version>-py3-none-any.whl`, built with `scripts/install_dev_kipy.py --wheel`
-  from the pinned upstream revision) and verifies the whole venv with an IPC capability probe.
-- **Packaged artifact smoke test** — `scripts/smoke_test_binary.py` starts the packaged executable,
-  completes the MCP handshake, checks the reported tool count, and validates that the bundled binding
-  contains the schematic and design-rule modules. A ZIP that cannot start now fails the build instead
-  of being published.
-- **Windows IPC endpoint discovery** — KiCad's API server binds a named pipe, and its name is not
-  always the path a client derives from its own environment: KiCad uses the short (8.3) form of the
-  temp directory when the user profile contains non-ASCII characters, and a KiCad started from a
-  different shell uses a different temp directory altogether. KiPilot now discovers a running KiCad
-  pipe automatically (`\\.\pipe\\` lookup) and accepts socket paths with or without the `ipc://`
-  prefix, so no `KICAD_API_SOCKET` configuration is needed for the common cases.
-
 ## What's New In 0.3.0
 
 The 0.3.0 release grows the MCP surface from 102 to 135 tools and closes the largest gaps between the
@@ -66,6 +39,18 @@ Python binding surface and the MCP tool surface:
 - **Verification script** — `scripts/verify_v0_3_0.py` exercises the new surface against an in-process
   fake endpoint (and a live endpoint when one is reachable), so the release can be checked without a
   running KiCad instance
+- **Verified Windows packaging** — the release build installs a prepared `kicad-python` binding wheel
+  (`vendor/kicad_python-<version>-py3-none-any.whl`; the PyPI 0.8.0 wheel ships inconsistent generated
+  protos and cannot serve the schematic, design-rule, export, or embedded-file tools), probes the
+  environment for the required IPC surface, and smoke-tests the packaged executable (MCP handshake,
+  reported tool count, bundled binding). Each optional binding symbol is imported on its own, so a
+  binding without a given name only disables the tools that need it instead of stopping the server
+- **Automatic IPC endpoint discovery** — KiCad binds its API server as a Windows named pipe, and the
+  pipe name is not always the path a client derives from its environment: KiCad uses the 8.3 short
+  form of the temp directory when the user profile contains non-ASCII characters, and a KiCad started
+  from a different shell uses a different temp directory. KiPilot now discovers a running KiCad pipe
+  itself and accepts socket paths with or without the `ipc://` prefix, so `KICAD_API_SOCKET` is only
+  needed for unusual setups
 
 Every new mutation keeps the existing safety contract: `dry_run` previews without the mutation gate,
 real writes need `KIPILOT_ENABLE_MUTATIONS=1`, and destructive operations (embedded-file replacement,

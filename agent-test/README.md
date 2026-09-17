@@ -21,7 +21,7 @@ Open this `agent-test` folder in a separate VS Code window if you want a clean w
 
 ## What The v0.3.0 MCP Surface Adds
 
-The test workspace is expected to run against KiPilot MCP v0.3.0 or newer, which exposes 135 tools. Use the **v0.3.1** Windows ZIP for this: it carries the same 135 tools, but ships a working bundled `kicad-python` binding (the 0.3.0 ZIP bundled the broken PyPI 0.8.0 wheel and could not start). The families below are the ones that most affect agent workflows:
+The test workspace is expected to run against KiPilot MCP v0.3.0 or newer, which exposes 135 tools. Use the published **v0.3.0 Windows ZIP**: it ships the working bundled `kicad-python` binding and discovers the KiCad IPC endpoint automatically. The families below are the ones that most affect agent workflows:
 
 | Family | Tools | KiCad build |
 | --- | --- | --- |
