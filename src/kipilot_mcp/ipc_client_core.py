@@ -11,6 +11,7 @@ from typing import Any
 
 from .config import KiCadIpcConfig
 from .errors import KiCadBindingUnavailableError, KiCadCapabilityError, KiCadLookupError
+from .ipc_endpoint import resolve_socket_url
 from .kipy_compat import log_binding_gaps, optional_import
 from .lookups import (
     BoundingBoxFilter,
@@ -256,7 +257,7 @@ class KiCadIpcClientCore:
                     "KICAD_API_TOKEN if you are not using the default platform IPC endpoint."
                 ),
             )
-            result["socket_path"] = self._config.socket_path
+            result["socket_path"] = self._effective_socket_url()
             result["client_name"] = self._config.client_name
             return result
 
@@ -275,7 +276,7 @@ class KiCadIpcClientCore:
                     "IPC endpoint."
                 ),
             )
-            result["socket_path"] = self._config.socket_path
+            result["socket_path"] = self._effective_socket_url()
             result["client_name"] = self._config.client_name
             return result
 
@@ -545,7 +546,7 @@ class KiCadIpcClientCore:
         version_info = self._read_runtime_version_info(kicad, allow_unavailable=True)
         return {
             "ok": True,
-            "socket_path": self._config.socket_path,
+            "socket_path": self._effective_socket_url(),
             "client_name": self._config.client_name,
             **version_info,
             "message": "KiCad IPC endpoint is reachable.",
@@ -569,7 +570,7 @@ class KiCadIpcClientCore:
 
         return {
             "ok": True,
-            "socket_path": self._config.socket_path,
+            "socket_path": self._effective_socket_url(),
             "client_name": self._config.client_name,
             **version_info,
             "message": "KiCad IPC endpoint is reachable.",
@@ -581,12 +582,18 @@ class KiCadIpcClientCore:
             "timeout_ms": self._config.timeout_ms,
         }
 
-        if self._config.socket_path:
-            kwargs["socket_path"] = self._config.socket_path
+        socket_url = self._effective_socket_url()
+        if socket_url:
+            kwargs["socket_path"] = socket_url
         if self._config.api_token:
             kwargs["kicad_token"] = self._config.api_token
 
         return kwargs
+
+    def _effective_socket_url(self) -> str | None:
+        """Return the endpoint to dial, discovering a running KiCad server if needed."""
+
+        return resolve_socket_url(self._config.socket_path)
 
     def _with_kicad(self, operation: Callable[[Any], dict[str, Any]]) -> dict[str, Any]:
         factory = self._resolve_kicad_factory()
@@ -1516,7 +1523,7 @@ class KiCadIpcClientCore:
         endpoint_label = "/".join(endpoint_types) if endpoint_types else "editor"
         result = {
             "ok": True,
-            "socket_path": self._config.socket_path,
+            "socket_path": self._effective_socket_url(),
             "client_name": self._config.client_name,
             "endpoint_types": endpoint_types,
             **self._binding_version_info_only(kicad),

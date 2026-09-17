@@ -1,8 +1,68 @@
 from __future__ import annotations
 
+import pytest
+
 from kipilot_mcp.config import KiCadIpcConfig
 from kipilot_mcp.ipc_client import ApiError, KiCadIpcClient
 from kipilot_mcp.ipc_client_core import KiCadFutureVersionError
+
+
+@pytest.fixture(autouse=True)
+def _use_configured_endpoint_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep these tests independent of a running KiCad on the build machine.
+
+    The real resolver also discovers a local KiCad named pipe on Windows, which would
+    make the expected connection payload depend on the host.  Endpoint resolution itself
+    is covered by tests/test_ipc_endpoint.py.
+    """
+
+    monkeypatch.setattr(
+        "kipilot_mcp.ipc_client_core.resolve_socket_url",
+        lambda configured=None, **_: configured,
+    )
+
+
+async def test_connection_uses_discovered_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    discovered = "ipc://C:\\Users\\SZALON~2\\AppData\\Local\\Temp\\kicad\\api.sock"
+    calls: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "kipilot_mcp.ipc_client_core.resolve_socket_url",
+        lambda configured=None, **_: discovered,
+    )
+
+    class FakeKiCad:
+        def __init__(self, **kwargs: object) -> None:
+            calls["kwargs"] = kwargs
+
+        def ping(self) -> None:
+            calls["ping"] = True
+
+        def get_version(self) -> str:
+            return "10.0.1"
+
+        def get_api_version(self) -> str:
+            return "0.0.0"
+
+        def check_version(self) -> bool:
+            return True
+
+        def close(self) -> None:
+            calls["closed"] = True
+
+    client = KiCadIpcClient(
+        KiCadIpcConfig(client_name="test-client"),
+        kicad_factory=FakeKiCad,
+    )
+    result = await client.check_connection()
+
+    assert result["socket_path"] == discovered
+    assert result["ok"] is True
+    assert calls["kwargs"] == {
+        "client_name": "test-client",
+        "timeout_ms": KiCadIpcConfig.timeout_ms,
+        "socket_path": discovered,
+    }
 
 
 async def test_check_connection_uses_kicad_python_factory() -> None:

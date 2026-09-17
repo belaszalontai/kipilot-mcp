@@ -36,6 +36,12 @@ The 0.3.1 release fixes the downloadable Windows ZIP artifact of 0.3.0:
   completes the MCP handshake, checks the reported tool count, and validates that the bundled binding
   contains the schematic and design-rule modules. A ZIP that cannot start now fails the build instead
   of being published.
+- **Windows IPC endpoint discovery** — KiCad's API server binds a named pipe, and its name is not
+  always the path a client derives from its own environment: KiCad uses the short (8.3) form of the
+  temp directory when the user profile contains non-ASCII characters, and a KiCad started from a
+  different shell uses a different temp directory altogether. KiPilot now discovers a running KiCad
+  pipe automatically (`\\.\pipe\\` lookup) and accepts socket paths with or without the `ipc://`
+  prefix, so no `KICAD_API_SOCKET` configuration is needed for the common cases.
 
 ## What's New In 0.3.0
 

@@ -18,6 +18,9 @@ Use this checklist when publishing a Windows executable release.
   embedded-file IPC surface.
 - Confirm the packaged-artifact smoke test passed (`PASS: kipilot-mcp started, <n> MCP tools available.`).
   It runs automatically at the end of the build and fails on a ZIP that cannot complete the MCP handshake.
+- Start KiCad and verify one live read against the packaged executable **without** setting
+  `KICAD_API_SOCKET`: `ping_kicad` must report the running KiCad version. This exercises the Windows
+  named-pipe discovery and proves the artifact talks to a real KiCad instance.
 - Smoke-test the extracted executable through an MCP host configuration, not by double-clicking it.
 
 ## Binding Maintenance
