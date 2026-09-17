@@ -21,7 +21,7 @@ Open this `agent-test` folder in a separate VS Code window if you want a clean w
 
 ## What The v0.3.0 MCP Surface Adds
 
-The test workspace is expected to run against KiPilot MCP v0.3.0 or newer, which exposes 135 tools. The families below are the ones that most affect agent workflows:
+The test workspace is expected to run against KiPilot MCP v0.3.0 or newer, which exposes 135 tools. Use the **v0.3.1** Windows ZIP for this: it carries the same 135 tools, but ships a working bundled `kicad-python` binding (the 0.3.0 ZIP bundled the broken PyPI 0.8.0 wheel and could not start). The families below are the ones that most affect agent workflows:
 
 | Family | Tools | KiCad build |
 | --- | --- | --- |
@@ -61,7 +61,7 @@ Use the versions below for the smoothest setup on Windows:
 | KiCad (schematic) | 11.0 master/nightly | The schematic surface needs a build that implements the schematic IPC handlers. Upstream 10.0.x only answers open-document queries there |
 | KiCad (design rules) | 11.0 master/nightly | Board design rules, custom rules, KiCad paths, and headless document creation are KiCad 11 features |
 | KiCad (embedded files) | 10.0.7+ | Listing and editing files embedded in the board file needs KiCad 10.0.7 or newer |
-| `kicad-python` | `>=0.7.1` | Runtime dependency. The v0.3.0 features (design rules, custom rules, job-based exports, embedded files, schematic lifecycle) need the `0.9.0.dev0` binding from upstream `main`, which the Windows ZIP already bundles |
+| `kicad-python` | bundled | Runtime dependency. The v0.3.0 features (design rules, custom rules, job-based exports, embedded files, schematic lifecycle) need the `0.9.0.dev0` binding from upstream `main`. The Windows ZIP bundles a prepared build of that binding (`vendor/kicad_python-*.whl`); the PyPI 0.8.0 wheel cannot be used for them at all, because several of its modules fail to import |
 | `mcp` | `>=1.8.0,<2` | Runtime dependency |
 | `pytest` | `>=8.3.0` | Optional, only for local test/development work |
 | `pytest-asyncio` | `>=0.24.0` | Optional, only for local test/development work |

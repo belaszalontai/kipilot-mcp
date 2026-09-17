@@ -16,6 +16,27 @@ Usage videos are available at [kipilot.org/galery.html](https://kipilot.org/gale
 
 Public project documentation is available at [kipilot.org/docs.html](https://kipilot.org/docs.html).
 
+## What's New In 0.3.1
+
+The 0.3.1 release fixes the downloadable Windows ZIP artifact of 0.3.0:
+
+- **Start-up crash fixed** — the optional `kicad-python` imports now tolerate bindings that miss
+  individual names (`ImportError`) and not just missing modules (`ModuleNotFoundError`). A binding
+  without `kipy.common_types.PathType` no longer stops the server; only the tools that need the
+  missing symbol report a capability error. Each optional symbol is imported on its own, so a single
+  missing name no longer disables the other bindings.
+- **Replaced release artifact** — the 0.3.0 Windows ZIP bundled the PyPI `kicad-python` 0.8.0 wheel,
+  which ships inconsistent generated protos: `kipy.board_jobs`, `kipy.board_rules`, `kipy.schematic`,
+  and `kipy.schematic_types` cannot be imported at all in that release, so the packaged server
+  crashed before any tool could run.
+- **Reproducible binding for packaging** — the release build now installs a prepared binding wheel
+  (`vendor/kicad_python-<version>-py3-none-any.whl`, built with `scripts/install_dev_kipy.py --wheel`
+  from the pinned upstream revision) and verifies the whole venv with an IPC capability probe.
+- **Packaged artifact smoke test** — `scripts/smoke_test_binary.py` starts the packaged executable,
+  completes the MCP handshake, checks the reported tool count, and validates that the bundled binding
+  contains the schematic and design-rule modules. A ZIP that cannot start now fails the build instead
+  of being published.
+
 ## What's New In 0.3.0
 
 The 0.3.0 release grows the MCP surface from 102 to 135 tools and closes the largest gaps between the
@@ -197,9 +218,14 @@ The supported KiCad version depends on the tool family you use:
   line. KiCad 11.0.0 has no announced release date yet.
 - The Python wrapper side is already available in source form: `kicad-python` from the upstream `main` branch
   (version `0.9.0.dev0`) and later. The 0.9.0 release is not on PyPI yet, so packaging that needs the schematic
-  client bindings must vendor or pin the wrapper rather than rely on `pip install kicad-python`.
-- The Windows ZIP release bundles both the Python runtime and the `kicad-python` binding, so no separate wrapper
-  installation is needed when you install from the downloadable Windows artifact.
+  client bindings must vendor or pin the wrapper rather than rely on `pip install kicad-python`. The published
+  PyPI 0.8.0 wheel is not usable for schematic or design-rule work at all, because its generated protos are
+  inconsistent and several of its modules fail to import.
+- The Windows ZIP release bundles both the Python runtime and the `kicad-python` binding (from the prepared
+  wheel in `vendor/`), so no separate wrapper installation is needed when you install from the downloadable
+  Windows artifact.
+- Source installs that only need the PCB surface can stay on a released `kicad-python`, but the schematic,
+  design-rule, export-job, and embedded-file tools need the prepared binding.
 
 Use a stable CPython release such as 3.11, 3.12, or 3.13. Avoid preview or alpha Python interpreters because the native dependency chain may not publish wheels for them yet.
 

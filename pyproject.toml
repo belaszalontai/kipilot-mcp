@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kipilot-mcp"
-version = "0.3.0"
+version = "0.3.1"
 description = "Model Context Protocol server for connecting AI agents to a running KiCad instance."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,6 +24,8 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)"
 ]
 dependencies = [
+  # The release builds ship a prepared kicad-python wheel (vendor/); the PyPI 0.8.0 wheel has
+  # inconsistent generated protos and cannot serve the schematic, design-rule, or export tools.
   "kicad-python>=0.7.1",
   "mcp>=1.8.0,<2"
 ]
