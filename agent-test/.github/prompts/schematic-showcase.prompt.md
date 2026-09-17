@@ -1,6 +1,6 @@
 ---
 name: schematic-showcase
-description: "Full-spectrum KiPilot MCP schematic showcase: inspect the live sheet, stamp the title block, draw an annotated functional block, highlight it, edit and hit-test items, prove the netlist changed, manage design variants, export the documentation pack, and save."
+description: "Full-spectrum KiPilot MCP schematic showcase: inspect the live sheet, stamp the title block, draw an annotated functional block, highlight it, edit and hit-test items, prove the netlist changed, manage design variants, export the documentation pack, save, and write a save-as copy."
 agent: kicad-agent
 tools: [todo, "kipilot-mcp/*"]
 ---
@@ -27,6 +27,7 @@ Use exactly these absolute paths for the export phase:
 - PDF file: `C:/Work/bitbucket/kipilot-mcp/agent-test/out/sch-demo/kipilot-showcase.pdf`
 - Netlist file: `C:/Work/bitbucket/kipilot-mcp/agent-test/out/sch-demo/kipilot-showcase.net`
 - BOM file: `C:/Work/bitbucket/kipilot-mcp/agent-test/out/sch-demo/kipilot-showcase.csv`
+- Save-as copy: `C:/Work/bitbucket/kipilot-mcp/agent-test/out/sch-demo/kipilot-showcase-copy.kicad_sch`
 
 ## Phase 0 — Connect
 
@@ -43,6 +44,7 @@ Use exactly these absolute paths for the export phase:
 - `kicad_sch_get_symbols(limit=20)`, `kicad_sch_get_labels(limit=20)` — a short inventory of what the sheet already contains.
 - `kicad_sch_get_netlist()` — remember the net count and keep the list of net names.
 - `kicad_sch_get_variants` — existing variants and the active one.
+- `kicad_sch_get_items(kinds=["sheet", "sheet_pin", "image", "shape", "bus_entry", "rule_area", "table", "group"], limit=100)` — demonstrate the read-only kinds added in v0.3.0 and report which of them the sheet actually contains.
 
 Report: dirty state, page size, symbol count, net count, active variant, and the free-area anchor you will use.
 
@@ -51,8 +53,8 @@ Choose the net to join in Phase 3 from this netlist: prefer a named net that is 
 ## Phase 2 — Title block (first visible change)
 
 - `kicad_sch_set_title_block(dry_run=true)` with:
-  - `title`: `KiPilot MCP v0.2.0 Schematic Showcase`
-  - `revision`: `v0.2.0`
+  - `title`: `KiPilot MCP v0.3.0 Schematic Showcase`
+  - `revision`: `v0.3.0`
   - `company`: `gwt_team`
   - `comments`: `{1: "Drawn live over the KiCad IPC API by GitHub Copilot"}`
 - Repeat live, then `kicad_sch_get_title_block` to verify field by field.
@@ -71,7 +73,7 @@ State the chosen `BX`/`BY` and the reason in one line before drawing.
 
 Build this exact block relative to `BX`, `BY` and send it as one `kicad_sch_create_items` call (`dry_run=true` first, then live):
 
-- `text` `KiPilot MCP v0.2.0 — live schematic block` at `(BX, BY - 8)`
+- `text` `KiPilot MCP v0.3.0 — live schematic block` at `(BX, BY - 8)`
 - `wire` closed box: `(BX,BY) (BX+70,BY) (BX+70,BY+40) (BX,BY+40) (BX,BY)`
 - `wire` signal line straight through: `(BX-12,BY+10) (BX+82,BY+10)`
 - `wire` branch downwards: `(BX+35,BY+10) (BX+35,BY+34)`
@@ -100,7 +102,7 @@ Note: a `hierarchical_label` only makes sense inside a subsheet. Mention that on
 
 ## Phase 5 — Edit and precisely hit-test
 
-- `kicad_sch_update_items` on the header `text` item: change its text to `KiPilot MCP v0.2.0 — edited live by the agent`. Dry-run, live, then verify with `kicad_sch_get_items(kinds=["text"], limit=50)`.
+- `kicad_sch_update_items` on the header `text` item: change its text to `KiPilot MCP v0.3.0 — edited live by the agent`. Dry-run, live, then verify with `kicad_sch_get_items(kinds=["text"], limit=50)`.
 - `kicad_sch_hit_test` on the `DEMO_CLK` label item id at its exact anchor `(BX+20, BY+10)` with `tolerance_mm=0.5` — expect a hit.
 - `kicad_sch_hit_test` on the same item at `(BX+60, BY+30)` — expect a miss.
 - Explain in one line that this is point-precise geometric interrogation of a live editor object.
@@ -126,6 +128,7 @@ Note: a `hierarchical_label` only makes sense inside a subsheet. Mention that on
 - `kicad_sch_export_pdf(output_file="C:/Work/bitbucket/kipilot-mcp/agent-test/out/sch-demo/kipilot-showcase.pdf")`
 - `kicad_sch_export_netlist(output_file="C:/Work/bitbucket/kipilot-mcp/agent-test/out/sch-demo/kipilot-showcase.net", variant_name="KIPILOT_DEMO")`
 - `kicad_sch_export_bom(output_file="C:/Work/bitbucket/kipilot-mcp/agent-test/out/sch-demo/kipilot-showcase.csv", group_symbols=true, variant_name="KIPILOT_DEMO")`
+- `kicad_sch_save_as(filename="C:/Work/bitbucket/kipilot-mcp/agent-test/out/sch-demo/kipilot-showcase-copy.kicad_sch", dry_run=true)` then live — this writes a copy of the live sheet to disk without opening it, so state clearly that the original document is untouched by the copy step.
 - Report every returned output path verbatim so the viewer can open the SVG and the PDF.
 
 ## Phase 9 — Persist and wrap up
@@ -134,7 +137,7 @@ Note: a `hierarchical_label` only makes sense inside a subsheet. Mention that on
 - `kicad_sch_is_document_modified()` — must now report clean.
 - `kicad_sch_set_current_variant()` to restore the default variant, and confirm with `kicad_sch_get_current_variant()`.
 - Close with a compact summary table:
-  - what was read, what was created (with counts), what was edited, what was exported (with paths), what is persisted, and what remains optional (symbol placement, hierarchical labels on subsheets, review of the exported SVG/PDF).
+  - what was read (including which read-only kinds the sheet contained), what was created (with counts), what was edited, what was exported (with paths), what was saved and copied with save-as, and what remains optional (symbol placement, hierarchical labels on subsheets, review of the exported SVG/PDF).
 
 ## Optional bonus (only when asked)
 

@@ -35,9 +35,14 @@ This workspace is a dedicated test harness for using the sibling `kipilot-mcp` s
 ## Scope Limits
 
 - Treat PCB work in this workspace as KiCad 10 PCB-first.
+- Board manufacturing exports (`kicad_export_*`) run the KiCad-side export jobs. They leave the board document untouched but write real files to the target path, and they can exceed the default IPC timeout on large boards.
+- Board design rules (`kicad_get_design_rules`, `kicad_set_design_rules`, `kicad_get_custom_design_rules`, `kicad_set_custom_design_rules`), `kicad_get_paths`, and `kicad_create_document` need a KiCad 11 (master/nightly) build. On a stable 10.x endpoint, report the capability error instead of working around it.
+- Embedded file tools (`kicad_get_embedded_files`, `kicad_add_embedded_files`, `kicad_set_embedded_files`) need KiCad 10.0.7 or newer, and replacing the embedded set is destructive and force-gated.
+- `kicad_import_netlist` is a bulk board mutation: preview it with `dry_run=true` first unless the user explicitly asks for a live forward annotation, and say that it can add, update, and delete footprints in one call.
+- `kicad_run_action` executes raw KiCad TOOL_ACTION names, which are not a stable public API. Use it only when a specific action name is requested, and report the returned status.
 - The schematic surface (`kicad_sch_*`) is available when KiCad 11 (master/nightly) is running with the IPC API enabled. On upstream KiCad 10.0.x the schematic handler only exposes open-document queries, so schematic calls fail with a capability error; report that limitation instead of working around it.
-- Schematic creation, editing, selection, variant, and export tools follow the same dry-run-first and `ok: true` evidence rules as board mutations.
-- Do not assume headless KiCad control is available.
+- Schematic creation, editing, selection, variant, lifecycle, and export tools follow the same dry-run-first and `ok: true` evidence rules as board mutations.
+- Do not assume headless KiCad control is available: `kicad_open_document`, `kicad_create_document`, and `kicad_close_document` only work against a headless KiCad API server session, and a GUI endpoint answers with a capability error.
 - If the requested action is outside the current MCP surface, say that clearly and offer a PCB-scoped alternative.
 - Do not use repository reads, workspace file inspection, terminal parsing, or chat-session artifact inspection as a substitute for live board-state MCP queries.
 - If the requested action is outside the current MCP surface, do not compensate by mining chat-session files or terminal output; report the limitation plainly.
@@ -47,8 +52,9 @@ This workspace is a dedicated test harness for using the sibling `kipilot-mcp` s
 
 ## Safety
 
-- Treat `kicad_revert_board` and `kicad_delete_items` as destructive operations.
+- Treat `kicad_revert_board`, `kicad_delete_items`, `kicad_sch_revert`, and `kicad_set_embedded_files` as destructive operations.
 - Do not claim that a board change was applied unless the MCP tool returned `ok: true`.
+- Export tools write files, not document content: a successful export proves the export path, never that the board is correct.
 - If mutations are disabled, use dry-run previews and explain that live writes are currently blocked by configuration.
 - Do not change `.vscode/mcp.json` or other workspace configuration just to enable live writes unless the user explicitly asks for that workspace change.
 - When inferring function blocks from footprints, nets, or zones, clearly mark them as inference rather than direct fact.

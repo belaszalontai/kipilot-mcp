@@ -432,6 +432,7 @@ Its purpose is to provide:
 - a clean workspace separate from the main source tree
 - a ready-made `.vscode/mcp.json` configuration that points to the sibling KiPilot server
 - custom Copilot agent and instruction files for KiCad-focused testing
+- two ready-to-run showcase prompts: `/schematic-showcase` for the schematic surface and `/board-release-showcase` for the manufacturing export, design rule, and embedded-file surface
 - a controlled workspace for end-to-end MCP validation
 
 Open `agent-test/` in a separate VS Code window when you want to test the full agent workflow end to end without mixing that setup into the main development workspace.

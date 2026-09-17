@@ -8,6 +8,7 @@ Open this `agent-test` folder in a separate VS Code window if you want a clean w
 - a dedicated KiCad hardware agent that works on both the board and the schematic
 - project-level Copilot instructions for KiCad MCP usage
 - a ready-to-run schematic showcase prompt
+- a ready-to-run board release/export showcase prompt for the v0.3.0 tool families
 
 ## What Is Included
 
@@ -15,7 +16,37 @@ Open this `agent-test` folder in a separate VS Code window if you want a clean w
 - `.github/copilot-instructions.md`: always-on workspace instructions for this mini test project
 - `.github/agents/kicad-agent.agent.md`: the custom electronics/KiCad agent definition, covering board and schematic work
 - `.github/prompts/schematic-showcase.prompt.md`: the `/schematic-showcase` schematic showcase prompt
-- `.logs/` and `out/`: server log and export targets created at runtime
+- `.github/prompts/board-release-showcase.prompt.md`: the `/board-release-showcase` manufacturing export and design rule prompt
+- `.logs/` and `out/`: server log and export targets created at runtime (`out/sch-demo/`, `out/board-demo/`)
+
+## What The v0.3.0 MCP Surface Adds
+
+The test workspace is expected to run against KiPilot MCP v0.3.0 or newer, which exposes 135 tools. The families below are the ones that most affect agent workflows:
+
+| Family | Tools | KiCad build |
+| --- | --- | --- |
+| Board manufacturing exports | `kicad_export_board_svg`, `kicad_export_board_dxf`, `kicad_export_board_pdf`, `kicad_export_board_ps`, `kicad_export_gerbers`, `kicad_export_drill`, `kicad_export_position`, `kicad_export_gencad`, `kicad_export_ipc2581`, `kicad_export_ipc_d356`, `kicad_export_odb`, `kicad_export_stats`, `kicad_export_3d`, `kicad_export_render` | 10.x |
+| Design rules | `kicad_get_design_rules`, `kicad_set_design_rules`, `kicad_get_custom_design_rules`, `kicad_set_custom_design_rules` | 11.0 master/nightly |
+| Embedded files | `kicad_get_embedded_files`, `kicad_add_embedded_files`, `kicad_set_embedded_files` | 10.0.7+ |
+| Workspace and session | `kicad_get_paths`, `kicad_get_kicad_binary_path`, `kicad_get_plugin_settings_path`, `kicad_run_action`, `kicad_open_document`, `kicad_create_document`, `kicad_close_document`, `kicad_set_project_net_classes` | 11.0 for paths and document creation; headless-only for document open/create/close |
+| Forward annotation and geometry | `kicad_import_netlist`, `kicad_get_bounding_box` | 10.x |
+| Schematic lifecycle | `kicad_sch_save_as`, `kicad_sch_revert` | 11.0 master/nightly |
+
+Two behavioral notes matter for agent runs:
+
+- Export tools write real files to disk. They do not modify the KiCad document, but they do need a writable target directory or file path, and large boards can exceed the IPC timeout. This workspace already raises it with `KIPILOT_KICAD_TIMEOUT_MS=120000`.
+- `kicad_set_embedded_files` replaces every embedded file, and `kicad_sch_revert` discards unsaved work, so both require `force=true` on top of the mutation gate.
+
+## Board Release Showcase (v0.3.0)
+
+This workspace contains a second showcase that exercises the manufacturing export, design rule, and embedded-file surface:
+
+| File | Purpose |
+| --- | --- |
+| `.github/prompts/board-release-showcase.prompt.md` | End-to-end board release prompt, invoked as `/board-release-showcase` |
+| `out/board-demo/` | Export target for the Gerber, drill, position, SVG, PDF, ODB++, IPC-2581, statistics, and 3D outputs |
+
+Run it the same way as the schematic showcase: open the `agent-test` folder, make sure the `kipilot-mcp` server is connected, open the board you want to use, select the `kicad-agent` agent, and run `/board-release-showcase`. Phases that need a newer KiCad build (design rules) are skipped with an explicit capability note instead of failing the run.
 
 ## Recommended Versions
 
@@ -26,9 +57,11 @@ Use the versions below for the smoothest setup on Windows:
 | Windows | Windows 10 or Windows 11 | This test harness is Windows-oriented because its MCP config points at a Windows virtual environment path |
 | Python | Stable CPython 3.11, 3.12, or 3.13 x64 | Avoid preview or alpha interpreters |
 | Supported Python range | 3.11+ | Declared by the project |
-| KiCad | 10.x | Board tools run against the stable 10.x series (10.0.6 or later recommended) |
+| KiCad | 10.x | Board tools and board manufacturing exports run against the stable 10.x series (10.0.6 or later recommended) |
 | KiCad (schematic) | 11.0 master/nightly | The schematic surface needs a build that implements the schematic IPC handlers. Upstream 10.0.x only answers open-document queries there |
-| `kicad-python` | `>=0.7.1` | Runtime dependency. The schematic client bindings live in `0.9.0.dev0` on upstream `main`, and the Windows ZIP bundles them |
+| KiCad (design rules) | 11.0 master/nightly | Board design rules, custom rules, KiCad paths, and headless document creation are KiCad 11 features |
+| KiCad (embedded files) | 10.0.7+ | Listing and editing files embedded in the board file needs KiCad 10.0.7 or newer |
+| `kicad-python` | `>=0.7.1` | Runtime dependency. The v0.3.0 features (design rules, custom rules, job-based exports, embedded files, schematic lifecycle) need the `0.9.0.dev0` binding from upstream `main`, which the Windows ZIP already bundles |
 | `mcp` | `>=1.8.0,<2` | Runtime dependency |
 | `pytest` | `>=8.3.0` | Optional, only for local test/development work |
 | `pytest-asyncio` | `>=0.24.0` | Optional, only for local test/development work |
@@ -105,7 +138,7 @@ It is configured to start the sibling KiPilot server with:
 
 - Python executable: `..\.venv\Scripts\python.exe`
 - module: `kipilot_mcp.server`
-- timeout: `60000 ms`
+- timeout: `120000 ms`
 - log level: `INFO`
 - log file: `.logs/kipilot-agent-test.log`
 - mutations: enabled in this workspace (`KIPILOT_ENABLE_MUTATIONS=1`)
@@ -176,7 +209,7 @@ Create a DNP design variant, describe it, switch to it, and export the BOM for t
 
 ## Schematic Showcase On KiCad 11
 
-The schematic surface shipped in KiPilot MCP v0.2.0 needs a KiCad build that implements the schematic IPC handlers. Upstream KiCad 10.0.x registers only `GetOpenDocuments` on the schematic API handler, so use a KiCad 11 (master/nightly) build for schematic work.
+The schematic surface shipped in KiPilot MCP v0.2.0 and was extended in v0.3.0 with document lifecycle tools (`kicad_sch_save_as`, `kicad_sch_revert`) and wider item reads. It needs a KiCad build that implements the schematic IPC handlers. Upstream KiCad 10.0.x registers only `GetOpenDocuments` on the schematic API handler, so use a KiCad 11 (master/nightly) build for schematic work.
 
 This workspace contains a ready-to-run showcase for that surface:
 
@@ -216,7 +249,9 @@ This test workspace currently ships with live writes enabled:
 - `KIPILOT_ENABLE_MUTATIONS=1` in `.vscode/mcp.json`
 - read tools work normally
 - mutation tools apply immediately unless you pass `dry_run=true` yourself
-- destructive tools such as board revert, item deletion, and variant deletion still require explicit force guards
+- destructive tools such as board revert, item deletion, variant deletion, and schematic revert still require explicit force guards, and `kicad_set_embedded_files` also requires `force=true` because it replaces every embedded file
+- `kicad_import_netlist` is a large board mutation even when it runs cleanly: preview it with `dry_run=true` first, and make sure a save-as copy exists if you do not want the forward annotation persisted
+- export tools never change the document, but they do write files into `agent-test/out/` and can be slow on large boards
 - schematic mutations only land when the connected KiCad build supports the schematic IPC handlers
 
 To go back to the conservative default, edit `.vscode/mcp.json` and change:
@@ -273,6 +308,15 @@ It also logs to `stderr`, which is useful when you manually run the server proce
 - Start a KiCad 11 (master/nightly) build instead, open the Schematic Editor, and retry.
 - See `Schematic Showcase On KiCad 11` above for the build and run steps.
 
+### Design rule tools fail with a capability error
+
+- `kicad_get_design_rules`, `kicad_set_design_rules`, `kicad_get_custom_design_rules`, `kicad_set_custom_design_rules`, `kicad_get_paths`, and `kicad_create_document` are KiCad 11 features. On a stable 10.x endpoint they answer with a capability error, which is expected; continue with the 10.x-compatible phases of a run.
+
+### An export tool times out or reports a busy endpoint
+
+- Zone refills, Gerber, and 3D exports can take longer than the default 60 s IPC timeout. Raise `KIPILOT_KICAD_TIMEOUT_MS` in `.vscode/mcp.json` (for example to `180000`) and retry.
+- Make sure the target directory exists and is writable; directory-output jobs write one file per layer into it.
+
 ## Suggested First Test Prompt
 
 ```text
@@ -289,4 +333,16 @@ Use the KiCad MCP tools to find the footprint whose value is LOGO. Explain wheth
 
 ```text
 Use the KiCad MCP tools to verify the connection, report the KiCad version, then summarize the open schematic: hierarchy, title block, page settings, symbol count, and netlist size. Stay read-only, and call out explicitly when a step would normally be a write.
+```
+
+## Suggested Board Export Test Prompt
+
+```text
+Use the KiCad MCP tools to inspect the open board, report its layer stackup and board outline, then prepare a manufacturing pack into agent-test/out/board-demo: Gerber files, Excellon drill files, a pick-and-place position file, and a PDF plot. Quote every returned output path and say clearly that exporting does not modify the board.
+```
+
+## Suggested Design Rule Test Prompt
+
+```text
+Use the KiCad MCP tools to read the board design rules and the custom rule set. Summarize the minimum clearance, track width, via size, and any custom rules. Then preview a single design rule change with dry_run=true and explain what a live write would change, without applying it.
 ```

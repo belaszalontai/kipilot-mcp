@@ -1,0 +1,12 @@
+# Repository line-ending policy.
+#
+# Every text file is stored with LF in the repository, so a CRLF/LF difference in a
+# working tree can never show up as a content change again: git normalizes the file
+# when it is staged and compares the normalized content afterwards.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF for maximum compatibility with older tooling.
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
