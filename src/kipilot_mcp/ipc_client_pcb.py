@@ -6,49 +6,41 @@ import base64
 
 from .ipc_client_core import *  # noqa: F401,F403
 from .ipc_client_core import _parse_dict  # noqa: F401
+from .kipy_compat import log_binding_gaps, optional_import
 
-try:
-    from kipy.board_jobs import (
-        Export3DSettings as KiCadExport3DSettings,
-    )  # type: ignore[import-not-found]
-    from kipy.board_jobs import (
-        Ipc2581ExportSettings as KiCadIpc2581ExportSettings,
-    )  # type: ignore[import-not-found]
-    from kipy.board_jobs import (
-        PlotSettings as KiCadBoardPlotSettings,
-    )  # type: ignore[import-not-found]
-    from kipy.board_jobs import (
-        PositionExportSettings as KiCadPositionExportSettings,
-    )  # type: ignore[import-not-found]
-    from kipy.board_jobs import (
-        RenderSettings as KiCadRenderSettings,
-    )  # type: ignore[import-not-found]
-    from kipy.board_rules import BoardDesignRules as KiCadBoardDesignRules  # type: ignore[import-not-found]
-    from kipy.board_rules import CustomRule as KiCadCustomRule  # type: ignore[import-not-found]
-    from kipy.common_types import EmbeddedFile as KiCadEmbeddedFile  # type: ignore[import-not-found]
-    from kipy.proto.board import (  # type: ignore[import-not-found]
-        board_commands_pb2 as KiCadBoardCommandsProto,
+# Optional bindings. Every symbol is imported on its own so that a kipy version without
+# one of them only disables the matching tools instead of the whole server.
+KiCadBoardPlotSettings = optional_import("kipy.board_jobs", "PlotSettings")
+KiCadExport3DSettings = optional_import("kipy.board_jobs", "Export3DSettings")
+KiCadRenderSettings = optional_import("kipy.board_jobs", "RenderSettings")
+KiCadPositionExportSettings = optional_import("kipy.board_jobs", "PositionExportSettings")
+KiCadIpc2581ExportSettings = optional_import("kipy.board_jobs", "Ipc2581ExportSettings")
+KiCadBoardDesignRules = optional_import("kipy.board_rules", "BoardDesignRules")
+KiCadCustomRule = optional_import("kipy.board_rules", "CustomRule")
+KiCadEmbeddedFile = optional_import("kipy.common_types", "EmbeddedFile")
+KiCadBoardCommandsProto = optional_import("kipy.proto.board", "board_commands_pb2")
+KiCadBoardJobsProto = optional_import("kipy.proto.board", "board_jobs_pb2")
+KiCadBoardRulesProto = optional_import("kipy.proto.board", "board_rules_pb2")
+KiCadCommonEnumsProto = optional_import("kipy.proto.common.types", "enums_pb2")
+
+if KiCad is not None:
+    log_binding_gaps(
+        "kipilot-mcp.pcb",
+        {
+            "kiPy.board_jobs.PlotSettings": KiCadBoardPlotSettings,
+            "kiPy.board_jobs.Export3DSettings": KiCadExport3DSettings,
+            "kiPy.board_jobs.RenderSettings": KiCadRenderSettings,
+            "kiPy.board_jobs.PositionExportSettings": KiCadPositionExportSettings,
+            "kiPy.board_jobs.Ipc2581ExportSettings": KiCadIpc2581ExportSettings,
+            "kiPy.board_rules.BoardDesignRules": KiCadBoardDesignRules,
+            "kiPy.board_rules.CustomRule": KiCadCustomRule,
+            "kiPy.common_types.EmbeddedFile": KiCadEmbeddedFile,
+            "kiPy.proto.board.board_commands_pb2": KiCadBoardCommandsProto,
+            "kiPy.proto.board.board_jobs_pb2": KiCadBoardJobsProto,
+            "kiPy.proto.board.board_rules_pb2": KiCadBoardRulesProto,
+            "kiPy.proto.common.types.enums_pb2": KiCadCommonEnumsProto,
+        },
     )
-    from kipy.proto.board import (  # type: ignore[import-not-found]
-        board_jobs_pb2 as KiCadBoardJobsProto,
-    )
-    from kipy.proto.board import (  # type: ignore[import-not-found]
-        board_rules_pb2 as KiCadBoardRulesProto,
-    )
-    from kipy.proto.common.types import enums_pb2 as KiCadCommonEnumsProto  # type: ignore[import-not-found]
-except ModuleNotFoundError:  # pragma: no cover - depends on local environment
-    KiCadExport3DSettings = None
-    KiCadIpc2581ExportSettings = None
-    KiCadBoardPlotSettings = None
-    KiCadPositionExportSettings = None
-    KiCadRenderSettings = None
-    KiCadBoardDesignRules = None
-    KiCadCustomRule = None
-    KiCadEmbeddedFile = None
-    KiCadBoardCommandsProto = None
-    KiCadBoardJobsProto = None
-    KiCadBoardRulesProto = None
-    KiCadCommonEnumsProto = None
 
 BOARD_JOB_SETTINGS_TYPES = {
     "3d": KiCadExport3DSettings,
@@ -1521,12 +1513,19 @@ class KiCadPcbClientMixin:
         raise KiCadLookupError(f"Unsupported board export output kind: {output_kind!r}.")
 
     def _create_board_job_settings(self, settings_key: str, settings: dict[str, Any]) -> Any:
-        settings_class = BOARD_JOB_SETTINGS_TYPES.get(str(settings_key).strip().lower())
-        if settings_class is None:
+        normalized_key = str(settings_key).strip().lower()
+        if normalized_key not in BOARD_JOB_SETTINGS_TYPES:
             raise KiCadLookupError(
                 f"Unsupported export settings type {settings_key!r}. Supported types: "
                 + ", ".join(sorted(BOARD_JOB_SETTINGS_TYPES))
                 + "."
+            )
+
+        settings_class = BOARD_JOB_SETTINGS_TYPES[normalized_key]
+        if settings_class is None:
+            raise KiCadCapabilityError(
+                f"The installed kicad-python version does not provide {normalized_key} export "
+                "settings. Upgrade kicad-python to enable this export format."
             )
 
         return self._build_settings_wrapper(settings_class, settings, label=f"{settings_key} settings")

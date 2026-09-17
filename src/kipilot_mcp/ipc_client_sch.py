@@ -7,105 +7,69 @@ from pathlib import Path
 from typing import Any
 
 from .ipc_client_core import *  # noqa: F401,F403
+from .kipy_compat import log_binding_gaps, optional_import
 from .serializers import (
     serialize_schematic_bom_field_settings,
     serialize_schematic_bom_format_settings,
 )
 
-try:
-    from kipy.common_types import (  # type: ignore[import-not-found]
-        LibraryIdentifier as KiCadLibraryIdentifier,
+# Optional bindings. Every symbol is imported on its own so that a kipy version without
+# one of them only disables the matching tools instead of the whole server.
+KiCadLibraryIdentifier = optional_import("kipy.common_types", "LibraryIdentifier")
+KiCadText = optional_import("kipy.common_types", "Text")
+KiCadSchematicProto = optional_import("kipy.proto.schematic", "schematic_types_pb2")
+KiCadBusEntry = optional_import("kipy.schematic_types", "BusEntry")
+KiCadDirectiveLabel = optional_import("kipy.schematic_types", "DirectiveLabel")
+KiCadGlobalLabel = optional_import("kipy.schematic_types", "GlobalLabel")
+KiCadHierarchicalLabel = optional_import("kipy.schematic_types", "HierarchicalLabel")
+KiCadJunction = optional_import("kipy.schematic_types", "Junction")
+KiCadLocalLabel = optional_import("kipy.schematic_types", "LocalLabel")
+KiCadNoConnectMarker = optional_import("kipy.schematic_types", "NoConnectMarker")
+KiCadSchematicField = optional_import("kipy.schematic_types", "SchematicField")
+KiCadSchematicGraphicShape = optional_import("kipy.schematic_types", "SchematicGraphicShape")
+KiCadSchematicGroup = optional_import("kipy.schematic_types", "Group")
+KiCadSchematicImage = optional_import("kipy.schematic_types", "SchematicImage")
+KiCadSchematicLine = optional_import("kipy.schematic_types", "SchematicLine")
+KiCadSchematicPin = optional_import("kipy.schematic_types", "SchematicPin")
+KiCadSchematicRuleArea = optional_import("kipy.schematic_types", "SchematicRuleArea")
+KiCadSchematicSymbol = optional_import("kipy.schematic_types", "SchematicSymbol")
+KiCadSchematicSymbolInstance = optional_import("kipy.schematic_types", "SchematicSymbolInstance")
+KiCadSchematicTable = optional_import("kipy.schematic_types", "SchematicTable")
+KiCadSchematicTextBox = optional_import("kipy.schematic_types", "SchematicTextBox")
+KiCadSchematicText = optional_import("kipy.schematic_types", "SchematicText")
+KiCadSheetPin = optional_import("kipy.schematic_types", "SheetPin")
+KiCadSheetSymbol = optional_import("kipy.schematic_types", "SheetSymbol")
+
+if KiCad is not None:
+    log_binding_gaps(
+        "kipilot-mcp.sch",
+        {
+            "kiPy.common_types.LibraryIdentifier": KiCadLibraryIdentifier,
+            "kiPy.common_types.Text": KiCadText,
+            "kiPy.proto.schematic.schematic_types_pb2": KiCadSchematicProto,
+            "kiPy.schematic_types.BusEntry": KiCadBusEntry,
+            "kiPy.schematic_types.DirectiveLabel": KiCadDirectiveLabel,
+            "kiPy.schematic_types.GlobalLabel": KiCadGlobalLabel,
+            "kiPy.schematic_types.HierarchicalLabel": KiCadHierarchicalLabel,
+            "kiPy.schematic_types.Junction": KiCadJunction,
+            "kiPy.schematic_types.LocalLabel": KiCadLocalLabel,
+            "kiPy.schematic_types.NoConnectMarker": KiCadNoConnectMarker,
+            "kiPy.schematic_types.SchematicField": KiCadSchematicField,
+            "kiPy.schematic_types.SchematicGraphicShape": KiCadSchematicGraphicShape,
+            "kiPy.schematic_types.Group": KiCadSchematicGroup,
+            "kiPy.schematic_types.SchematicImage": KiCadSchematicImage,
+            "kiPy.schematic_types.SchematicLine": KiCadSchematicLine,
+            "kiPy.schematic_types.SchematicPin": KiCadSchematicPin,
+            "kiPy.schematic_types.SchematicRuleArea": KiCadSchematicRuleArea,
+            "kiPy.schematic_types.SchematicSymbol": KiCadSchematicSymbol,
+            "kiPy.schematic_types.SchematicSymbolInstance": KiCadSchematicSymbolInstance,
+            "kiPy.schematic_types.SchematicTable": KiCadSchematicTable,
+            "kiPy.schematic_types.SchematicTextBox": KiCadSchematicTextBox,
+            "kiPy.schematic_types.SchematicText": KiCadSchematicText,
+            "kiPy.schematic_types.SheetPin": KiCadSheetPin,
+            "kiPy.schematic_types.SheetSymbol": KiCadSheetSymbol,
+        },
     )
-    from kipy.common_types import Text as KiCadText  # type: ignore[import-not-found]
-    from kipy.proto.schematic import (  # type: ignore[import-not-found]
-        schematic_types_pb2 as KiCadSchematicProto,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        BusEntry as KiCadBusEntry,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        DirectiveLabel as KiCadDirectiveLabel,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        Group as KiCadSchematicGroup,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SchematicField as KiCadSchematicField,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SchematicGraphicShape as KiCadSchematicGraphicShape,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SchematicImage as KiCadSchematicImage,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SchematicPin as KiCadSchematicPin,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SchematicRuleArea as KiCadSchematicRuleArea,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SchematicTable as KiCadSchematicTable,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SchematicTextBox as KiCadSchematicTextBox,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SheetPin as KiCadSheetPin,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SheetSymbol as KiCadSheetSymbol,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        GlobalLabel as KiCadGlobalLabel,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        HierarchicalLabel as KiCadHierarchicalLabel,
-    )
-    from kipy.schematic_types import Junction as KiCadJunction  # type: ignore[import-not-found]
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        LocalLabel as KiCadLocalLabel,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        NoConnectMarker as KiCadNoConnectMarker,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SchematicLine as KiCadSchematicLine,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SchematicSymbol as KiCadSchematicSymbol,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SchematicSymbolInstance as KiCadSchematicSymbolInstance,
-    )
-    from kipy.schematic_types import (  # type: ignore[import-not-found]
-        SchematicText as KiCadSchematicText,
-    )
-except ModuleNotFoundError:  # pragma: no cover - depends on local environment
-    KiCadLibraryIdentifier = None
-    KiCadText = None
-    KiCadSchematicProto = None
-    KiCadBusEntry = None
-    KiCadDirectiveLabel = None
-    KiCadGlobalLabel = None
-    KiCadHierarchicalLabel = None
-    KiCadJunction = None
-    KiCadLocalLabel = None
-    KiCadNoConnectMarker = None
-    KiCadSchematicField = None
-    KiCadSchematicGraphicShape = None
-    KiCadSchematicGroup = None
-    KiCadSchematicImage = None
-    KiCadSchematicLine = None
-    KiCadSchematicPin = None
-    KiCadSchematicRuleArea = None
-    KiCadSchematicSymbol = None
-    KiCadSchematicSymbolInstance = None
-    KiCadSchematicTable = None
-    KiCadSchematicTextBox = None
-    KiCadSchematicText = None
-    KiCadSheetPin = None
-    KiCadSheetSymbol = None
 
 DEFAULT_SCHEMATIC_NETLIST_FORMAT = 2
 

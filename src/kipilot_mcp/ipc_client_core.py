@@ -11,6 +11,7 @@ from typing import Any
 
 from .config import KiCadIpcConfig
 from .errors import KiCadBindingUnavailableError, KiCadCapabilityError, KiCadLookupError
+from .kipy_compat import log_binding_gaps, optional_import
 from .lookups import (
     BoundingBoxFilter,
     filter_items_by_area,
@@ -147,38 +148,10 @@ logger = logging.getLogger(__name__)
 
 try:
     from kipy import KiCad  # type: ignore[import-not-found]
-    from kipy.board_types import to_concrete_board_shape as kipy_to_concrete_board_shape  # type: ignore[import-not-found]
-    from kipy.board_types import Track as KiCadTrack  # type: ignore[import-not-found]
-    from kipy.board_types import Via as KiCadVia  # type: ignore[import-not-found]
-    from kipy.common_types import PathType as KiCadPathType  # type: ignore[import-not-found]
     from kipy.errors import ApiError  # type: ignore[import-not-found]
     from kipy.errors import FutureVersionError as KiCadFutureVersionError  # type: ignore[import-not-found]
-    from kipy.geometry import (
-        PolygonWithHoles as KiCadPolygonWithHoles,
-    )  # type: ignore[import-not-found]
-    from kipy.geometry import PolyLine as KiCadPolyLine  # type: ignore[import-not-found]
-    from kipy.geometry import PolyLineNode as KiCadPolyLineNode  # type: ignore[import-not-found]
-    from kipy.geometry import Vector2 as KiCadVector2  # type: ignore[import-not-found]
-    from kipy.proto.common.types import DocumentSpecifier as KiCadDocumentSpecifier  # type: ignore[import-not-found]
-    from kipy.proto.common.types import DocumentType as KiCadDocumentType  # type: ignore[import-not-found]
-    from kipy.proto.common.types import (
-        project_settings_pb2 as KiCadProjectSettingsProto,
-    )  # type: ignore[import-not-found]
-    from kipy.project_types import NetClass as KiCadNetClass  # type: ignore[import-not-found]
-except ModuleNotFoundError as exc:  # pragma: no cover - depends on local environment
+except Exception as exc:  # pragma: no cover - depends on local environment
     KiCad = None
-    KiCadTrack = None
-    KiCadVia = None
-    kipy_to_concrete_board_shape = None
-    KiCadPathType = None
-    KiCadPolyLine = None
-    KiCadPolyLineNode = None
-    KiCadPolygonWithHoles = None
-    KiCadVector2 = None
-    KiCadDocumentSpecifier = None
-    KiCadDocumentType = None
-    KiCadProjectSettingsProto = None
-    KiCadNetClass = None
 
     class ApiError(RuntimeError):
         """Fallback API error used when kicad-python is unavailable."""
@@ -190,10 +163,46 @@ except ModuleNotFoundError as exc:  # pragma: no cover - depends on local enviro
 else:
     _KIPY_IMPORT_ERROR = None
 
+# Optional bindings. Every symbol is imported on its own so that a kipy version without
+# one of them only disables the matching tools instead of the whole server.
+kipy_to_concrete_board_shape = optional_import("kipy.board_types", "to_concrete_board_shape")
+KiCadTrack = optional_import("kipy.board_types", "Track")
+KiCadVia = optional_import("kipy.board_types", "Via")
+KiCadPathType = optional_import("kipy.common_types", "PathType")
+KiCadPolygonWithHoles = optional_import("kipy.geometry", "PolygonWithHoles")
+KiCadPolyLine = optional_import("kipy.geometry", "PolyLine")
+KiCadPolyLineNode = optional_import("kipy.geometry", "PolyLineNode")
+KiCadVector2 = optional_import("kipy.geometry", "Vector2")
+KiCadDocumentSpecifier = optional_import("kipy.proto.common.types", "DocumentSpecifier")
+KiCadDocumentType = optional_import("kipy.proto.common.types", "DocumentType")
+KiCadProjectSettingsProto = optional_import("kipy.proto.common.types", "project_settings_pb2")
+KiCadNetClass = optional_import("kipy.project_types", "NetClass")
+
+if _KIPY_IMPORT_ERROR is None:
+    MISSING_KIPY_CORE_BINDINGS = log_binding_gaps(
+        "kipilot-mcp",
+        {
+            "kiPy.board_types.to_concrete_board_shape": kipy_to_concrete_board_shape,
+            "kiPy.board_types.Track": KiCadTrack,
+            "kiPy.board_types.Via": KiCadVia,
+            "kiPy.common_types.PathType": KiCadPathType,
+            "kiPy.geometry.PolygonWithHoles": KiCadPolygonWithHoles,
+            "kiPy.geometry.PolyLine": KiCadPolyLine,
+            "kiPy.geometry.PolyLineNode": KiCadPolyLineNode,
+            "kiPy.geometry.Vector2": KiCadVector2,
+            "kiPy.proto.common.types.DocumentSpecifier": KiCadDocumentSpecifier,
+            "kiPy.proto.common.types.DocumentType": KiCadDocumentType,
+            "kiPy.proto.common.types.project_settings_pb2": KiCadProjectSettingsProto,
+            "kiPy.project_types.NetClass": KiCadNetClass,
+        },
+    )
+else:
+    MISSING_KIPY_CORE_BINDINGS = []
+
 try:  # pragma: no cover - protobuf ships with kicad-python
     from google.protobuf.json_format import MessageToDict as _message_to_dict
     from google.protobuf.json_format import ParseDict as _parse_dict
-except ModuleNotFoundError:  # pragma: no cover - depends on local environment
+except Exception:  # pragma: no cover - depends on local environment
     _message_to_dict = None
     _parse_dict = None
 
