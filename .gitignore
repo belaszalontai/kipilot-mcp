@@ -39,6 +39,10 @@ htmlcov/
 # Log files
 *.log
 
+# Showcase and test-workspace output artifacts
+agent-test/out/
+agent-test/.logs/
+
 # Local scratch / temp output directories
 .tmp/
 .logs/
