@@ -25,11 +25,13 @@ import sys
 
 PROTOCOL_VERSION = "2025-06-18"
 EXPECTED_SERVER_NAME = "kipilot-mcp"
-DEFAULT_MIN_TOOLS = 130
+DEFAULT_MIN_TOOLS = 144
 
 BUNDLE_ROOT_MARKERS = (
     "kipy/schematic_types.py",
     "kipy/proto/board/board_rules_pb2.py",
+    "kipy/proto/common/commands/library_commands_pb2.py",
+    "kipy/proto/common/types/library_types_pb2.py",
     "kipy/proto/schematic/schematic_types_pb2.py",
 )
 PATH_TYPE_MARKER = "PathType"

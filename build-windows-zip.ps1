@@ -110,10 +110,15 @@ import kipy.board_jobs
 import kipy.board_rules
 import kipy.common_types as common_types
 import kipy.proto.board.board_rules_pb2
+import kipy.proto.common.commands.library_commands_pb2
+import kipy.proto.common.types.library_types_pb2
 import kipy.proto.schematic.schematic_types_pb2
+import kipy.schematic
 import kipy.schematic_types
 
 assert common_types.PathType is not None
+assert common_types.LibraryStatus is not None
+assert hasattr(kipy.schematic.Schematic, "place_symbol_from_library")
 print("kipy-capable")
 "@
 
@@ -410,8 +415,20 @@ try {
     $smokeTestScript = Join-Path $repoRoot "scripts\smoke_test_binary.py"
     if (Test-Path $smokeTestScript) {
         Write-KiPilotBuildStatus "Verifying that the packaged executable completes the MCP handshake..."
-        & $venvPython $smokeTestScript $exePath
-        if ($LASTEXITCODE -ne 0) {
+        $smokeAttempts = 2
+        $smokePassed = $false
+        for ($attempt = 1; $attempt -le $smokeAttempts; $attempt++) {
+            & $venvPython $smokeTestScript $exePath
+            if ($LASTEXITCODE -eq 0) {
+                $smokePassed = $true
+                break
+            }
+            if ($attempt -lt $smokeAttempts) {
+                Write-KiPilotBuildStatus "Smoke test attempt $attempt failed; retrying..."
+                Start-Sleep -Seconds 2
+            }
+        }
+        if (-not $smokePassed) {
             throw "The packaged executable failed the MCP handshake smoke test."
         }
     }

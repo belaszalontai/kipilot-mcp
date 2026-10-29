@@ -16,6 +16,37 @@ Usage videos are available at [kipilot.org/galery.html](https://kipilot.org/gale
 
 Public project documentation is available at [kipilot.org/docs.html](https://kipilot.org/docs.html).
 
+## What's New In 0.4.0
+
+The 0.4.0 release grows the MCP surface from 135 to 144 tools and adds the KiCad 11 library and
+schematic-placement IPC surface:
+
+- **Library browsing (7 new tools)** — `kicad_lib_list_symbols`, `kicad_lib_get_symbol`,
+  `kicad_lib_list_footprints`, `kicad_lib_get_footprint`, `kicad_lib_statuses`, `kicad_lib_reload`,
+  and `kicad_lib_wait`. The lookup tools return real symbol/footprint definitions with pins, pads,
+  fields, and attributes, and close the library-access gap that previously blocked library-aware
+  placement workflows
+- **Library symbol placement (1 new tool)** — `kicad_sch_place_symbol_from_library` asks KiCad to
+  place a symbol from a library, so pins, fields, graphics, unit selection, and reference assignment
+  are preserved (unlike constructing an empty symbol definition client-side)
+- **Schematic PNG export (1 new tool)** — `kicad_sch_export_png` supports DPI (72–2400),
+  anti-aliasing control, and all-sheets (`output_path` is a directory) or single-sheet
+  (`output_path` is a file) output modes
+- **BOM compatibility and fields** — BOM export now defaults to KiCad's built-in CSV preset and a
+  grouped-by-value field set when no settings are supplied (the KiCad 11 wrapper requires a concrete
+  format object and at least one BOM field or preset), and the format/field settings expose
+  `include_byte_order_mark` and `filter_scope`
+- **Endpoint note** — symbol library tools require a Schematic Editor endpoint; footprint library
+  tools require a session with the PCB kiface loaded (the KiCad project manager, PCB Editor, or
+  Footprint Editor all work). An eeschema-only endpoint does not register the footprint library
+  handler. The tools report a clear capability error when the active endpoint lacks the matching
+  handler
+- **KiCad 11 requirement** — the new library, placement, and PNG tools require a KiCad 11
+  (master/nightly) build, matching the existing schematic surface. Tools report a clear capability
+  error on older runtimes
+- **Verification** — `scripts/verify_v0_4_0.py` exercises the new library, placement, and PNG surface
+  against an in-process fake endpoint (and a live endpoint when one is reachable)
+
 ## What's New In 0.3.0
 
 The 0.3.0 release grows the MCP surface from 102 to 135 tools and closes the largest gaps between the
@@ -67,7 +98,7 @@ KiPilot exists to let an MCP client inspect and manipulate KiCad documents that 
 - Adds selected higher-level MCP helpers on top of raw IPC primitives, such as a real footprint side-flip workflow that mirrors child artwork and swaps paired layers
 - Keeps KiCad as a separate, user-launched GUI application
 
-This repository targets the KiCad 10 PCB-first baseline. It does not aim to be a 1:1 wrapper over every public method exposed by the KiCad Python binding.
+This repository targets the KiCad 10 PCB-first baseline. The schematic, library browsing, library placement, and PNG export tools additionally require a KiCad 11 (master/nightly) build, because the required IPC handlers are not present in KiCad 10. It does not aim to be a 1:1 wrapper over every public method exposed by the KiCad Python binding.
 
 Where the raw IPC surface does not expose a single native operation but the underlying board objects are still mutable, KiPilot may provide a higher-level MCP tool that composes those lower-level capabilities into one agent-friendly action. The current example is `kicad_flip_footprint`, which performs a real mirrored side flip even though the KiCad binding does not expose one direct footprint-flip call.
 
@@ -86,14 +117,15 @@ Implemented MCP surface includes:
 - Workspace tools for KiCad paths, binaries, plugin settings directories, TOOL_ACTION execution, and headless document lifecycle
 - Guarded mutation tools for visible layers, active layer, enabled layers, footprint move/rotate/flip, footprint pad net reassignment, origins, title block fields, board text, track creation, via creation, item updates, track geometry, zone outlines, item deletion, zone refill, netlist import, project net classes, board revert, and board save
 - Schematic hierarchy, netlist, hit-testing, page-settings, title-block, metadata-mutation, lifecycle (save-as/revert), item reads, and export tools when the active KiCad runtime exposes schematic IPC support
-- 135 MCP tools total, covered by unit tests plus a runnable verification script
+- Library browsing, library symbol placement, and schematic PNG export tools on KiCad 11+
+- 144 MCP tools total, covered by unit tests plus a runnable verification script
 - Unit tests for IPC connection and error-handling behavior
 
 Committed baseline:
 
 - GUI IPC only
 - PCB editor first
-- Initial schematic inspection, hit-testing, metadata mutation, and export workflows are supported only when the running KiCad build exposes the newer schematic IPC surface
+- Initial schematic inspection, hit-testing, metadata mutation, library browsing, library placement, and export workflows are supported only when the running KiCad build exposes the newer schematic and library IPC surface (KiCad 11 master/nightly)
 - Read-heavy workflows first, validated mutation workflows second
 - No committed headless automation scope
 
@@ -108,14 +140,17 @@ Available schematic tools:
 - Inspection: `kicad_sch_get_hierarchy`, `kicad_sch_get_netlist`, `kicad_sch_get_page_settings`, and `kicad_sch_get_title_block`
 - Inspection geometry: `kicad_sch_hit_test`
 - Guarded metadata mutation: `kicad_sch_set_page_settings` and `kicad_sch_set_title_block`
-- Plot export: `kicad_sch_export_svg`, `kicad_sch_export_dxf`, `kicad_sch_export_pdf`, and `kicad_sch_export_ps`
+- Plot export: `kicad_sch_export_svg`, `kicad_sch_export_dxf`, `kicad_sch_export_pdf`, `kicad_sch_export_ps`, and `kicad_sch_export_png`
 - File export: `kicad_sch_export_netlist` and `kicad_sch_export_bom`
+- Library browsing: `kicad_lib_list_symbols`, `kicad_lib_get_symbol`, `kicad_lib_list_footprints`, `kicad_lib_get_footprint`, `kicad_lib_statuses`, `kicad_lib_reload`, and `kicad_lib_wait`
+- Library placement: `kicad_sch_place_symbol_from_library`
 
 Important export semantics:
 
 - `kicad_sch_export_svg`, `kicad_sch_export_dxf`, and `kicad_sch_export_ps` take `output_dir` because KiCad writes one file per plotted sheet into a directory.
 - `kicad_sch_export_pdf` takes `output_file` because KiCad writes one PDF file to a file path.
 - `kicad_sch_export_netlist` and `kicad_sch_export_bom` also take `output_file` because they produce single file outputs.
+- `kicad_sch_export_png` takes `output_path`: with `sheet_mode="all_sheets"` it must be a directory, and with `sheet_mode="single_sheet"` it must be a file.
 - When you want a full schematic export, `plot_all=true` with omitted `plot_pages` is the safest default unless you already know the exact sheet-instance paths to filter.
 - In this environment, live end-to-end schematic MCP validation succeeded against a locally built `kicad-master` `eeschema` snapshot. The installed official KiCad 10.0.1 build did not expose the same reliable external schematic IPC behavior, so treat the schematic surface as source-build-gated rather than universally available across all KiCad 10 installations. Upstream KiCad 10.0.x registers only `GetOpenDocuments` on the schematic API handler, which is why the schematic tools need a KiCad 11 (master/nightly) build.
 

@@ -2147,6 +2147,7 @@ async def test_export_schematic_pdf_passes_plot_settings_and_options(monkeypatch
             "use_background_color": False,
             "min_pen_width": 0,
             "theme": "Plot",
+            "sheet_mode": None,
         },
         "requested_options": {
             "property_popups": True,
@@ -2277,6 +2278,7 @@ async def test_export_schematic_bom_passes_settings_and_options(
             "ref_range_delimiter": "-",
             "keep_tabs": True,
             "keep_line_breaks": True,
+            "include_byte_order_mark": None,
         },
         "requested_field_settings": {
             "preset_name": "Grouped By Value",
@@ -2287,6 +2289,7 @@ async def test_export_schematic_bom_passes_settings_and_options(
             "sort_field": "Reference",
             "sort_direction": 2,
             "filter": "${DNP} != 1",
+            "filter_scope": None,
         },
         "requested_options": {
             "exclude_dnp": True,

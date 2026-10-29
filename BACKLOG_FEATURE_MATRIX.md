@@ -26,6 +26,13 @@ Note: the local session store is empty in this environment, so the matrix below 
 
 ## Implementation Progress
 
+- 2026-10-27: implemented the KiCad 11 library-access and placement surface in `kipilot-mcp` v0.4.0:
+  `kicad_lib_list_symbols`, `kicad_lib_get_symbol`, `kicad_lib_list_footprints`,
+  `kicad_lib_get_footprint`, `kicad_lib_statuses`, `kicad_lib_reload`, `kicad_lib_wait`,
+  `kicad_sch_place_symbol_from_library`, and `kicad_sch_export_png`. The library-access epic in
+  section 3 is therefore implemented upstream (KiCad 11 IPC + `kicad-python` main) and exposed in
+  the MCP; the tools report a capability error on older runtimes. BOM export now defaults to the
+  built-in CSV preset and exposes `include_byte_order_mark` / `filter_scope`.
 - 2026-05-19: implemented `kicad_get_dimensions`, `kicad_get_groups`, `kicad_get_reference_images`, and `kicad_get_barcodes` in `kipilot-mcp`.
 - 2026-05-19: implemented `kicad_set_project_text_variables` with dry-run-safe project mutation plumbing.
 - 2026-05-19: implemented PCB selection and editor-state tools: `kicad_get_selection`, `kicad_add_to_selection`, `kicad_remove_from_selection`, `kicad_clear_selection`, `kicad_get_editor_appearance_settings`, `kicad_set_editor_appearance_settings`, and `kicad_get_graphics_defaults`.
