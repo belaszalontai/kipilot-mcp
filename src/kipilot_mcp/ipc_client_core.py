@@ -22,6 +22,8 @@ from .lookups import (
     resolve_net,
 )
 from .serializers import (
+    LIBRARY_TABLE_SCOPE_NAMES,
+    LIBRARY_TYPE_NAMES,
     serialize_editor_appearance_settings,
     serialize_job_result,
     merge_boxes,
@@ -37,6 +39,10 @@ from .serializers import (
     serialize_identifier,
     serialize_item,
     serialize_layer,
+    serialize_library_footprint,
+    serialize_library_identifier,
+    serialize_library_status,
+    serialize_library_symbol,
     serialize_net,
     serialize_net_class,
     serialize_pad,
@@ -178,6 +184,10 @@ KiCadDocumentSpecifier = optional_import("kipy.proto.common.types", "DocumentSpe
 KiCadDocumentType = optional_import("kipy.proto.common.types", "DocumentType")
 KiCadProjectSettingsProto = optional_import("kipy.proto.common.types", "project_settings_pb2")
 KiCadNetClass = optional_import("kipy.project_types", "NetClass")
+KiCadLibraryStatus = optional_import("kipy.common_types", "LibraryStatus")
+KiCadLibraryType = optional_import("kipy.proto.common.types", "LibraryType")
+KiCadLibraryTableScope = optional_import("kipy.proto.common.types", "LibraryTableScope")
+KiCadLibraryLoadStatus = optional_import("kipy.proto.common.types", "LibraryLoadStatus")
 
 if _KIPY_IMPORT_ERROR is None:
     MISSING_KIPY_CORE_BINDINGS = log_binding_gaps(
@@ -187,12 +197,16 @@ if _KIPY_IMPORT_ERROR is None:
             "kiPy.board_types.Track": KiCadTrack,
             "kiPy.board_types.Via": KiCadVia,
             "kiPy.common_types.PathType": KiCadPathType,
+            "kiPy.common_types.LibraryStatus": KiCadLibraryStatus,
             "kiPy.geometry.PolygonWithHoles": KiCadPolygonWithHoles,
             "kiPy.geometry.PolyLine": KiCadPolyLine,
             "kiPy.geometry.PolyLineNode": KiCadPolyLineNode,
             "kiPy.geometry.Vector2": KiCadVector2,
             "kiPy.proto.common.types.DocumentSpecifier": KiCadDocumentSpecifier,
             "kiPy.proto.common.types.DocumentType": KiCadDocumentType,
+            "kiPy.proto.common.types.LibraryLoadStatus": KiCadLibraryLoadStatus,
+            "kiPy.proto.common.types.LibraryTableScope": KiCadLibraryTableScope,
+            "kiPy.proto.common.types.LibraryType": KiCadLibraryType,
             "kiPy.proto.common.types.project_settings_pb2": KiCadProjectSettingsProto,
             "kiPy.project_types.NetClass": KiCadNetClass,
         },
@@ -225,6 +239,32 @@ DOCUMENT_TYPE_ALIASES = {
 }
 PROJECT_MERGE_MODE_MERGE = 1
 PROJECT_MERGE_MODE_REPLACE = 2
+LIBRARY_TYPE_SYMBOL = 1
+LIBRARY_TYPE_FOOTPRINT = 2
+LIBRARY_TYPE_ALIASES = {
+    "1": LIBRARY_TYPE_SYMBOL,
+    "symbol": LIBRARY_TYPE_SYMBOL,
+    "symbols": LIBRARY_TYPE_SYMBOL,
+    "lt_symbol": LIBRARY_TYPE_SYMBOL,
+    "2": LIBRARY_TYPE_FOOTPRINT,
+    "footprint": LIBRARY_TYPE_FOOTPRINT,
+    "footprints": LIBRARY_TYPE_FOOTPRINT,
+    "lt_footprint": LIBRARY_TYPE_FOOTPRINT,
+}
+LIBRARY_TABLE_SCOPE_GLOBAL = 1
+LIBRARY_TABLE_SCOPE_PROJECT = 2
+LIBRARY_TABLE_SCOPE_BOTH = 3
+LIBRARY_SCOPE_ALIASES = {
+    "1": LIBRARY_TABLE_SCOPE_GLOBAL,
+    "global": LIBRARY_TABLE_SCOPE_GLOBAL,
+    "lts_global": LIBRARY_TABLE_SCOPE_GLOBAL,
+    "2": LIBRARY_TABLE_SCOPE_PROJECT,
+    "project": LIBRARY_TABLE_SCOPE_PROJECT,
+    "lts_project": LIBRARY_TABLE_SCOPE_PROJECT,
+    "3": LIBRARY_TABLE_SCOPE_BOTH,
+    "both": LIBRARY_TABLE_SCOPE_BOTH,
+    "lts_both": LIBRARY_TABLE_SCOPE_BOTH,
+}
 
 
 class KiCadIpcClientCore:
@@ -355,6 +395,130 @@ class KiCadIpcClientCore:
             default_message="Unable to update project net classes through the IPC API.",
             mutation_name="set_project_net_classes",
             dry_run=dry_run,
+        )
+
+    async def list_library_symbols(
+        self,
+        nicknames: Sequence[str] | None = None,
+    ) -> dict[str, Any]:
+        """List symbol library identifiers from the loaded symbol libraries."""
+
+        return await self._run_kicad(
+            lambda kicad: self._list_library_items(
+                kicad,
+                library_type=LIBRARY_TYPE_SYMBOL,
+                nicknames=nicknames,
+            ),
+            default_message=(
+                "Unable to list symbol library items through the IPC API. Library tools require "
+                "KiCad 11 or newer with the IPC library API enabled."
+            ),
+        )
+
+    async def list_library_footprints(
+        self,
+        nicknames: Sequence[str] | None = None,
+    ) -> dict[str, Any]:
+        """List footprint library identifiers from the loaded footprint libraries."""
+
+        return await self._run_kicad(
+            lambda kicad: self._list_library_items(
+                kicad,
+                library_type=LIBRARY_TYPE_FOOTPRINT,
+                nicknames=nicknames,
+            ),
+            default_message=(
+                "Unable to list footprint library items through the IPC API. Library tools "
+                "require KiCad 11 or newer with the IPC library API enabled."
+            ),
+        )
+
+    async def get_library_symbol(self, lib_id: str) -> dict[str, Any]:
+        """Load a symbol definition (with pins and fields) from a library."""
+
+        return await self._run_kicad(
+            lambda kicad: self._get_library_symbol(kicad, lib_id),
+            default_message=(
+                "Unable to load the requested library symbol through the IPC API. Library tools "
+                "require KiCad 11 or newer with the IPC library API enabled."
+            ),
+        )
+
+    async def get_library_footprint(self, lib_id: str) -> dict[str, Any]:
+        """Load a footprint definition (with pads and fields) from a library."""
+
+        return await self._run_kicad(
+            lambda kicad: self._get_library_footprint(kicad, lib_id),
+            default_message=(
+                "Unable to load the requested library footprint through the IPC API. Library "
+                "tools require KiCad 11 or newer with the IPC library API enabled."
+            ),
+        )
+
+    async def get_library_statuses(
+        self,
+        library_type: int | str | None = None,
+        scope: int | str = "both",
+    ) -> dict[str, Any]:
+        """Return the load status of each library in the selected table scope."""
+
+        return await self._run_kicad(
+            lambda kicad: self._get_library_statuses(
+                kicad,
+                library_type=library_type,
+                scope=scope,
+            ),
+            default_message=(
+                "Unable to read library load statuses through the IPC API. Library tools require "
+                "KiCad 11 or newer with the IPC library API enabled."
+            ),
+        )
+
+    async def reload_library(
+        self,
+        library_type: int | str,
+        scope: int | str = "global",
+        nicknames: Sequence[str] | None = None,
+        *,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Reload library table rows from disk (KiCad reloads asynchronously)."""
+
+        return await self._run_kicad(
+            lambda kicad: self._reload_library(
+                kicad,
+                library_type=library_type,
+                scope=scope,
+                nicknames=nicknames,
+                dry_run=dry_run,
+            ),
+            default_message=(
+                "Unable to reload libraries through the IPC API. Library tools require KiCad 11 "
+                "or newer with the IPC library API enabled."
+            ),
+        )
+
+    async def wait_for_libraries(
+        self,
+        library_type: int | str | None = None,
+        scope: int | str = "both",
+        interval_ms: int = 500,
+        timeout_s: float = 60.0,
+    ) -> dict[str, Any]:
+        """Wait until the selected libraries finish loading."""
+
+        return await self._run_kicad(
+            lambda kicad: self._wait_for_libraries(
+                kicad,
+                library_type=library_type,
+                scope=scope,
+                interval_ms=interval_ms,
+                timeout_s=timeout_s,
+            ),
+            default_message=(
+                "Unable to wait for libraries through the IPC API. Library tools require KiCad "
+                "11 or newer with the IPC library API enabled."
+            ),
         )
 
     async def get_paths(self) -> dict[str, Any]:
@@ -1649,6 +1813,339 @@ class KiCadIpcClientCore:
 
     def _is_no_handler_available(self, exc: Exception) -> bool:
         return isinstance(exc, ApiError) and "no handler available" in str(exc).lower()
+
+    # ------------------------------------------------------------------
+    # Library lookup commands (KiCad 11+)
+    # ------------------------------------------------------------------
+    def _library_capability_error(self) -> KiCadCapabilityError:
+        return KiCadCapabilityError(
+            "The active KiCad endpoint does not expose the library IPC commands. Library "
+            "tools require KiCad 11 (nightly) or newer with the IPC library API enabled."
+        )
+
+    def _library_no_handler_error(self, library_type: int) -> KiCadCapabilityError:
+        if library_type == LIBRARY_TYPE_FOOTPRINT:
+            return KiCadCapabilityError(
+                "The active KiCad endpoint does not expose the footprint library IPC commands. "
+                "Open the KiCad project manager, PCB Editor, or Footprint Editor (so the PCB "
+                "kiface is loaded) and retry."
+            )
+
+        return KiCadCapabilityError(
+            "The active KiCad endpoint does not expose the symbol library IPC commands. "
+            "Open the KiCad Schematic Editor (KiCad 11 or newer) and retry."
+        )
+
+    def _normalize_library_identifier(self, lib_id: Any) -> str:
+        normalized = str(lib_id or "").strip()
+        library, separator, name = normalized.partition(":")
+        library = library.strip()
+        name = name.strip()
+        if not separator or not library or not name:
+            raise KiCadLookupError(
+                "lib_id must use the '<library>:<name>' form, for example 'Device:R'."
+            )
+        return f"{library}:{name}"
+
+    def _normalize_library_nicknames(self, nicknames: Sequence[str] | None) -> list[str]:
+        if nicknames is None:
+            return []
+        if isinstance(nicknames, str):
+            nicknames = [nicknames]
+
+        normalized: list[str] = []
+        for nickname in nicknames:
+            value = str(nickname).strip()
+            if value and value not in normalized:
+                normalized.append(value)
+        return normalized
+
+    def _resolve_library_type(
+        self,
+        value: int | str | None,
+        *,
+        allow_none: bool = False,
+    ) -> tuple[int | None, str | None]:
+        if value is None:
+            if allow_none:
+                return None, None
+            raise KiCadLookupError("library_type must be one of: symbol, footprint.")
+
+        if isinstance(value, bool):
+            raise KiCadLookupError("library_type must be one of: symbol, footprint.")
+
+        if isinstance(value, int):
+            numeric_value: int | None = value
+        else:
+            normalized = str(value).strip().lower()
+            numeric_value = (
+                int(normalized) if normalized.lstrip("-").isdigit() else None
+            )
+            if numeric_value is None:
+                numeric_value = LIBRARY_TYPE_ALIASES.get(normalized)
+
+        if numeric_value not in (LIBRARY_TYPE_SYMBOL, LIBRARY_TYPE_FOOTPRINT):
+            raise KiCadLookupError("library_type must be one of: symbol, footprint.")
+
+        return numeric_value, LIBRARY_TYPE_NAMES[numeric_value]
+
+    def _resolve_library_scope(
+        self,
+        value: int | str | None,
+        *,
+        allow_both: bool = True,
+    ) -> tuple[int, str]:
+        if value is None:
+            numeric_value: int | None = LIBRARY_TABLE_SCOPE_BOTH
+        elif isinstance(value, bool):
+            numeric_value = None
+        elif isinstance(value, int):
+            numeric_value = value
+        else:
+            normalized = str(value).strip().lower()
+            numeric_value = int(normalized) if normalized.isdigit() else None
+            if numeric_value is None:
+                numeric_value = LIBRARY_SCOPE_ALIASES.get(normalized)
+
+        allowed_scopes = (
+            (LIBRARY_TABLE_SCOPE_GLOBAL, LIBRARY_TABLE_SCOPE_PROJECT, LIBRARY_TABLE_SCOPE_BOTH)
+            if allow_both
+            else (LIBRARY_TABLE_SCOPE_GLOBAL, LIBRARY_TABLE_SCOPE_PROJECT)
+        )
+        if numeric_value not in allowed_scopes:
+            allowed_names = "global, project" if not allow_both else "global, project, both"
+            raise KiCadLookupError(f"scope must be one of: {allowed_names}.")
+
+        return numeric_value, LIBRARY_TABLE_SCOPE_NAMES[numeric_value]
+
+    def _resolve_library_document(self, kicad: Any) -> Any | None:
+        """Return the current document so project-specific libraries can be searched."""
+        for getter_name in ("get_schematic", "get_board"):
+            getter = getattr(kicad, getter_name, None)
+            if not callable(getter):
+                continue
+            try:
+                document_owner = getter()
+            except Exception:  # noqa: BLE001 - endpoint may not host that editor
+                continue
+            document = getattr(document_owner, "document", None)
+            if document is not None:
+                return document
+        return None
+
+    def _list_library_items(
+        self,
+        kicad: Any,
+        *,
+        library_type: int,
+        nicknames: Sequence[str] | None,
+    ) -> dict[str, Any]:
+        getter = getattr(kicad, "get_library_items", None)
+        if not callable(getter):
+            raise self._library_capability_error()
+
+        resolved_type, type_name = self._resolve_library_type(library_type)
+        normalized_nicknames = self._normalize_library_nicknames(nicknames)
+
+        try:
+            identifiers = list(getter(resolved_type, normalized_nicknames))
+        except Exception as exc:  # noqa: BLE001 - translate endpoint capability gaps
+            if self._is_no_handler_available(exc):
+                raise self._library_no_handler_error(resolved_type) from exc
+            raise
+
+        items = [serialize_library_identifier(identifier) for identifier in identifiers]
+
+        result: dict[str, Any] = {
+            "ok": True,
+            "library_type": type_name,
+            "library_type_value": resolved_type,
+            "nicknames": normalized_nicknames or None,
+            "count": len(items),
+            "items": items,
+        }
+        if not items:
+            result["hint"] = (
+                "No library items were returned. KiCad loads libraries asynchronously; call "
+                "kicad_lib_wait (or kicad_lib_statuses) and retry."
+            )
+        return result
+
+    def _get_library_symbol(self, kicad: Any, lib_id: str) -> dict[str, Any]:
+        getter = getattr(kicad, "get_library_symbol", None)
+        if not callable(getter):
+            raise self._library_capability_error()
+
+        normalized_lib_id = self._normalize_library_identifier(lib_id)
+        document = self._resolve_library_document(kicad)
+
+        try:
+            symbol = getter(normalized_lib_id, document=document)
+        except Exception as exc:  # noqa: BLE001 - surface the library error to the client
+            if self._is_no_handler_available(exc):
+                raise self._library_no_handler_error(LIBRARY_TYPE_SYMBOL) from exc
+            raise KiCadLookupError(
+                f"Unable to load library symbol {normalized_lib_id!r}: {exc}"
+            ) from exc
+
+        return {
+            "ok": True,
+            "lib_id": normalized_lib_id,
+            "document": serialize_document(document),
+            "symbol": serialize_library_symbol(symbol),
+        }
+
+    def _get_library_footprint(self, kicad: Any, lib_id: str) -> dict[str, Any]:
+        getter = getattr(kicad, "get_library_footprint", None)
+        if not callable(getter):
+            raise self._library_capability_error()
+
+        normalized_lib_id = self._normalize_library_identifier(lib_id)
+        document = self._resolve_library_document(kicad)
+
+        try:
+            footprint = getter(normalized_lib_id, document=document)
+        except Exception as exc:  # noqa: BLE001 - surface the library error to the client
+            if self._is_no_handler_available(exc):
+                raise self._library_no_handler_error(LIBRARY_TYPE_FOOTPRINT) from exc
+            raise KiCadLookupError(
+                f"Unable to load library footprint {normalized_lib_id!r}: {exc}"
+            ) from exc
+
+        return {
+            "ok": True,
+            "lib_id": normalized_lib_id,
+            "document": serialize_document(document),
+            "footprint": serialize_library_footprint(footprint),
+        }
+
+    def _serialize_library_statuses(self, statuses: Sequence[Any]) -> dict[str, Any]:
+        serialized = [
+            entry
+            for entry in (serialize_library_status(status) for status in statuses)
+            if entry is not None
+        ]
+        status_counts: dict[str, int] = {}
+        for entry in serialized:
+            status_name = str(entry.get("status", "unknown"))
+            status_counts[status_name] = status_counts.get(status_name, 0) + 1
+
+        return {
+            "count": len(serialized),
+            "status_counts": status_counts,
+            "libraries": serialized,
+        }
+
+    def _get_library_statuses(
+        self,
+        kicad: Any,
+        *,
+        library_type: int | str | None,
+        scope: int | str,
+    ) -> dict[str, Any]:
+        getter = getattr(kicad, "get_library_statuses", None)
+        if not callable(getter):
+            raise self._library_capability_error()
+
+        resolved_type, type_name = self._resolve_library_type(library_type, allow_none=True)
+        resolved_scope, scope_name = self._resolve_library_scope(scope)
+
+        statuses = list(getter(resolved_type, resolved_scope))
+        return {
+            "ok": True,
+            "library_type": type_name,
+            "library_type_value": resolved_type,
+            "scope": scope_name,
+            "scope_value": resolved_scope,
+            **self._serialize_library_statuses(statuses),
+        }
+
+    def _reload_library(
+        self,
+        kicad: Any,
+        *,
+        library_type: int | str,
+        scope: int | str,
+        nicknames: Sequence[str] | None,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        getter = getattr(kicad, "reload_library", None)
+        if not callable(getter) and not dry_run:
+            raise self._library_capability_error()
+
+        resolved_type, type_name = self._resolve_library_type(library_type)
+        resolved_scope, scope_name = self._resolve_library_scope(scope, allow_both=False)
+        normalized_nicknames = self._normalize_library_nicknames(nicknames)
+
+        previous_libraries = None
+        if dry_run:
+            status_getter = getattr(kicad, "get_library_statuses", None)
+            if callable(status_getter):
+                statuses = list(status_getter(resolved_type, resolved_scope))
+                previous_libraries = self._serialize_library_statuses(statuses)["libraries"]
+        else:
+            try:
+                getter(resolved_type, resolved_scope, normalized_nicknames)
+            except Exception as exc:  # noqa: BLE001 - surface the library error to the client
+                raise KiCadLookupError(f"Unable to reload libraries: {exc}") from exc
+
+        return {
+            "ok": True,
+            "dry_run": dry_run,
+            "library_type": type_name,
+            "library_type_value": resolved_type,
+            "scope": scope_name,
+            "scope_value": resolved_scope,
+            "nicknames": normalized_nicknames or None,
+            "reloaded": not dry_run,
+            "previous_libraries": previous_libraries,
+        }
+
+    def _wait_for_libraries(
+        self,
+        kicad: Any,
+        *,
+        library_type: int | str | None,
+        scope: int | str,
+        interval_ms: int,
+        timeout_s: float,
+    ) -> dict[str, Any]:
+        getter = getattr(kicad, "wait_for_libraries", None)
+        if not callable(getter):
+            raise self._library_capability_error()
+
+        if isinstance(interval_ms, bool) or not isinstance(interval_ms, int) or interval_ms < 0:
+            raise KiCadLookupError("interval_ms must be a non-negative integer.")
+        if isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float)) or timeout_s <= 0:
+            raise KiCadLookupError("timeout_s must be a positive number.")
+
+        resolved_type, type_name = self._resolve_library_type(library_type, allow_none=True)
+        resolved_scope, scope_name = self._resolve_library_scope(scope)
+
+        try:
+            statuses = list(
+                getter(
+                    types=resolved_type,
+                    interval_ms=interval_ms,
+                    timeout_s=float(timeout_s),
+                    scope=resolved_scope,
+                )
+            )
+        except TimeoutError as exc:
+            raise KiCadLookupError(
+                f"Timed out after {timeout_s}s waiting for libraries to finish loading."
+            ) from exc
+
+        return {
+            "ok": True,
+            "library_type": type_name,
+            "library_type_value": resolved_type,
+            "scope": scope_name,
+            "scope_value": resolved_scope,
+            "interval_ms": interval_ms,
+            "timeout_s": float(timeout_s),
+            **self._serialize_library_statuses(statuses),
+        }
 
     def _translate_error(self, exc: Exception, *, default_message: str) -> dict[str, Any]:
         message = str(exc)

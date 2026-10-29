@@ -319,6 +319,32 @@ async def kicad_sch_export_ps(
 
 
 @mcp.tool()
+async def kicad_sch_export_png(
+    output_path: str,
+    plot_settings: dict[str, Any] | None = None,
+    dpi: int | None = None,
+    antialiasing: str = "standard",
+    sheet_mode: str = "all_sheets",
+) -> dict[str, Any]:
+    """Export the current schematic to PNG files (KiCad 11+).
+
+    With ``sheet_mode="all_sheets"`` (the default) ``output_path`` is a directory and one
+    PNG file is written per sheet.  With ``sheet_mode="single_sheet"`` the bound sheet is
+    written to the file named by ``output_path``.  ``dpi`` must be between 72 and 2400.
+    """
+
+    return await _run_client_tool(
+        "kicad_sch_export_png",
+        "export_schematic_png",
+        output_path=output_path,
+        plot_settings=plot_settings,
+        dpi=dpi,
+        antialiasing=antialiasing,
+        sheet_mode=sheet_mode,
+    )
+
+
+@mcp.tool()
 async def kicad_sch_export_netlist(
     output_file: str,
     netlist_format: int | str = 2,
@@ -428,6 +454,41 @@ async def kicad_sch_create_items(
         "kicad_sch_create_items",
         "create_schematic_items",
         items=items,
+        dry_run=dry_run,
+        commit_message=commit_message,
+    )
+
+
+@mcp.tool()
+async def kicad_sch_place_symbol_from_library(
+    lib_id: str,
+    x_mm: float,
+    y_mm: float,
+    orientation: int | str | None = None,
+    unit: int | None = None,
+    reference: str | None = None,
+    sheet_path: str | None = None,
+    dry_run: bool = False,
+    commit_message: str | None = None,
+) -> dict[str, Any]:
+    """Place a symbol from a library onto the current schematic (KiCad 11+).
+
+    ``lib_id`` uses the ``<library>:<symbol>`` form (for example ``Device:R``).  The
+    library symbol is loaded by KiCad, so pins, fields, and graphics are preserved.
+    ``orientation`` accepts 0, 90, 180, or 270.  ``sheet_path`` may be a hierarchical
+    sheet path (as returned by ``kicad_sch_get_hierarchy``) to place on a subsheet.
+    """
+
+    return await _run_client_tool(
+        "kicad_sch_place_symbol_from_library",
+        "place_schematic_symbol_from_library",
+        lib_id=lib_id,
+        x_mm=x_mm,
+        y_mm=y_mm,
+        orientation=orientation,
+        unit=unit,
+        reference=reference,
+        sheet_path=sheet_path,
         dry_run=dry_run,
         commit_message=commit_message,
     )
@@ -1730,6 +1791,130 @@ async def kicad_set_project_net_classes(
         net_classes,
         merge_mode=merge_mode,
         dry_run=dry_run,
+    )
+
+
+# ---------------------------------------------------------------------------
+# v0.4.0: library browsing and placement (KiCad 11+)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def kicad_lib_list_symbols(
+    nicknames: list[str] | None = None,
+) -> dict[str, Any]:
+    """List symbol LIB_IDs from the loaded symbol libraries (KiCad 11+).
+
+    Pass library nicknames to restrict the query to specific libraries.  KiCad loads
+    libraries asynchronously; when the result is empty, call ``kicad_lib_wait`` first.
+    """
+
+    return await _run_client_tool(
+        "kicad_lib_list_symbols",
+        "list_library_symbols",
+        nicknames=nicknames,
+    )
+
+
+@mcp.tool()
+async def kicad_lib_get_symbol(lib_id: str) -> dict[str, Any]:
+    """Load a symbol definition with its pins, fields, and attributes (KiCad 11+).
+
+    ``lib_id`` uses the ``<library>:<symbol>`` form (for example ``Device:R``).
+    """
+
+    return await _run_client_tool(
+        "kicad_lib_get_symbol",
+        "get_library_symbol",
+        lib_id,
+    )
+
+
+@mcp.tool()
+async def kicad_lib_list_footprints(
+    nicknames: list[str] | None = None,
+) -> dict[str, Any]:
+    """List footprint LIB_IDs from the loaded footprint libraries (KiCad 11+)."""
+
+    return await _run_client_tool(
+        "kicad_lib_list_footprints",
+        "list_library_footprints",
+        nicknames=nicknames,
+    )
+
+
+@mcp.tool()
+async def kicad_lib_get_footprint(lib_id: str) -> dict[str, Any]:
+    """Load a footprint definition with its pads and fields (KiCad 11+).
+
+    ``lib_id`` uses the ``<library>:<footprint>`` form (for example
+    ``Resistor_SMD:R_0603_1608Metric``).
+    """
+
+    return await _run_client_tool(
+        "kicad_lib_get_footprint",
+        "get_library_footprint",
+        lib_id,
+    )
+
+
+@mcp.tool()
+async def kicad_lib_statuses(
+    library_type: str | None = None,
+    scope: str = "both",
+) -> dict[str, Any]:
+    """Return the load status of each library in the selected table scope (KiCad 11+).
+
+    ``library_type`` is ``symbol`` or ``footprint`` (omit for all types); ``scope`` is
+    ``global``, ``project``, or ``both``.
+    """
+
+    return await _run_client_tool(
+        "kicad_lib_statuses",
+        "get_library_statuses",
+        library_type=library_type,
+        scope=scope,
+    )
+
+
+@mcp.tool()
+async def kicad_lib_reload(
+    library_type: str,
+    scope: str = "global",
+    nicknames: list[str] | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Reload one or more library table rows from disk (KiCad 11+).
+
+    The reload is asynchronous; call ``kicad_lib_wait`` afterwards to wait for it.
+    """
+
+    return await _run_client_tool(
+        "kicad_lib_reload",
+        "reload_library",
+        library_type,
+        scope=scope,
+        nicknames=nicknames,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def kicad_lib_wait(
+    library_type: str | None = None,
+    scope: str = "both",
+    interval_ms: int = 500,
+    timeout_s: float = 60.0,
+) -> dict[str, Any]:
+    """Wait until the selected libraries finish loading (KiCad 11+)."""
+
+    return await _run_client_tool(
+        "kicad_lib_wait",
+        "wait_for_libraries",
+        library_type=library_type,
+        scope=scope,
+        interval_ms=interval_ms,
+        timeout_s=timeout_s,
     )
 
 

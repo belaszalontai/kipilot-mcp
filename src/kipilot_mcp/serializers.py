@@ -100,6 +100,7 @@ def serialize_schematic_plot_settings(plot_settings: Any) -> dict[str, Any] | No
         "use_background_color": getattr(plot_settings, "use_background_color", None),
         "min_pen_width": getattr(plot_settings, "min_pen_width", None),
         "theme": getattr(plot_settings, "theme", ""),
+        "sheet_mode": getattr(plot_settings, "sheet_mode", None),
     }
 
 
@@ -185,6 +186,7 @@ def serialize_schematic_bom_format_settings(format_settings: Any) -> dict[str, A
         "ref_range_delimiter": getattr(format_settings, "ref_range_delimiter", ""),
         "keep_tabs": getattr(format_settings, "keep_tabs", None),
         "keep_line_breaks": getattr(format_settings, "keep_line_breaks", None),
+        "include_byte_order_mark": getattr(format_settings, "include_byte_order_mark", None),
     }
 
 
@@ -212,6 +214,7 @@ def serialize_schematic_bom_field_settings(field_settings: Any) -> dict[str, Any
         "sort_field": getattr(field_settings, "sort_field", ""),
         "sort_direction": getattr(field_settings, "sort_direction", None),
         "filter": getattr(field_settings, "filter", ""),
+        "filter_scope": getattr(field_settings, "filter_scope", None),
     }
 
 
@@ -261,6 +264,189 @@ def serialize_sheet_instance(sheet: Any) -> dict[str, Any] | None:
         "page_number": getattr(sheet, "page_number", ""),
         "path": serialize_sheet_path(getattr(sheet, "path", None)),
         "children": [serialize_sheet_instance(child) for child in getattr(sheet, "children", [])],
+    }
+
+
+LIBRARY_TYPE_NAMES = {
+    0: "unknown",
+    1: "symbol",
+    2: "footprint",
+    3: "design_block",
+}
+LIBRARY_TABLE_SCOPE_NAMES = {
+    0: "unknown",
+    1: "global",
+    2: "project",
+    3: "both",
+}
+LIBRARY_LOAD_STATUS_NAMES = {
+    0: "unknown",
+    1: "invalid",
+    2: "loading",
+    3: "loaded",
+    4: "error",
+}
+
+
+def _library_enum_value(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def serialize_library_identifier(identifier: Any) -> dict[str, Any] | None:
+    """Serialize a kipy ``LibraryIdentifier`` (a LIB_ID) to library/name parts."""
+    if identifier is None:
+        return None
+
+    library = str(getattr(identifier, "library", "") or "")
+    name = str(getattr(identifier, "name", "") or "")
+    item_id = f"{library}:{name}" if library or name else str(identifier)
+    return {"id": item_id, "library": library, "name": name}
+
+
+def serialize_library_status(status: Any) -> dict[str, Any] | None:
+    """Serialize a kipy ``LibraryStatus`` entry, including enum names for readability."""
+    if status is None:
+        return None
+
+    type_value = getattr(status, "type", None)
+    scope_value = getattr(status, "scope", None)
+    status_value = getattr(status, "status", None)
+    return {
+        "nickname": getattr(status, "nickname", ""),
+        "library_type": LIBRARY_TYPE_NAMES.get(_library_enum_value(type_value), "unknown"),
+        "library_type_value": type_value,
+        "scope": LIBRARY_TABLE_SCOPE_NAMES.get(_library_enum_value(scope_value), "unknown"),
+        "scope_value": scope_value,
+        "status": LIBRARY_LOAD_STATUS_NAMES.get(_library_enum_value(status_value), "unknown"),
+        "status_value": status_value,
+        "error_message": getattr(status, "error_message", None),
+    }
+
+
+def serialize_library_symbol(symbol: Any) -> dict[str, Any] | None:
+    """Serialize a library symbol definition (pins, fields, attributes)."""
+    if symbol is None:
+        return None
+
+    pins: list[dict[str, Any]] = []
+    for pin in _as_sequence(getattr(symbol, "pins", []) or []):
+        length_nm = getattr(pin, "length", None)
+        pins.append(
+            {
+                "name": getattr(pin, "name", ""),
+                "number": getattr(pin, "number", ""),
+                "position": serialize_vector(getattr(pin, "position", None)),
+                "length_nm": length_nm,
+                "length_mm": nanometers_to_millimeters(length_nm)
+                if isinstance(length_nm, int)
+                else None,
+                "orientation": getattr(pin, "orientation", None),
+                "electrical_type": getattr(pin, "electrical_type", None),
+                "shape": getattr(pin, "shape", None),
+                "visible": getattr(pin, "visible", None),
+                "alternates": [
+                    {
+                        "name": getattr(alternate, "name", ""),
+                        "shape": getattr(alternate, "shape", None),
+                        "electrical_type": getattr(alternate, "electrical_type", None),
+                    }
+                    for alternate in _as_sequence(getattr(pin, "alternates", []) or [])
+                ],
+            }
+        )
+
+    fields: list[dict[str, Any]] = []
+    for field in _as_sequence(getattr(symbol, "fields", []) or []):
+        fields.append(
+            {
+                "name": getattr(field, "name", ""),
+                "value": normalize_schematic_text(getattr(field, "text", None)),
+                "visible": getattr(field, "visible", None),
+                "show_name": getattr(field, "show_name", None),
+                "is_private": getattr(field, "is_private", None),
+            }
+        )
+
+    attributes = getattr(symbol, "attributes", None)
+    attributes_summary = None
+    if attributes is not None:
+        attributes_summary = {
+            "do_not_populate": getattr(attributes, "do_not_populate", None),
+            "exclude_from_bill_of_materials": getattr(
+                attributes, "exclude_from_bill_of_materials", None
+            ),
+            "exclude_from_board": getattr(attributes, "exclude_from_board", None),
+            "exclude_from_position_files": getattr(
+                attributes, "exclude_from_position_files", None
+            ),
+            "exclude_from_simulation": getattr(attributes, "exclude_from_simulation", None),
+        }
+
+    return {
+        "id": serialize_library_identifier(getattr(symbol, "id", None)),
+        "symbol_type": getattr(symbol, "type", None),
+        "unit_count": getattr(symbol, "unit_count", None),
+        "body_style_count": getattr(symbol, "body_style_count", None),
+        "keywords": getattr(symbol, "keywords", ""),
+        "footprint_filters": list(getattr(symbol, "footprint_filters", []) or []),
+        "reference": field_text(getattr(symbol, "reference_field", None)),
+        "value": field_text(getattr(symbol, "value_field", None)),
+        "footprint": field_text(getattr(symbol, "footprint_field", None)),
+        "datasheet": field_text(getattr(symbol, "datasheet_field", None)),
+        "description": field_text(getattr(symbol, "description_field", None)),
+        "pin_count": len(pins),
+        "pins": pins,
+        "field_count": len(fields),
+        "fields": fields,
+        "attributes": attributes_summary,
+    }
+
+
+def serialize_library_footprint(footprint: Any) -> dict[str, Any] | None:
+    """Serialize a footprint library definition (pads, texts, fields, models)."""
+    if footprint is None:
+        return None
+
+    pads = [
+        serialize_pad(pad) for pad in _as_sequence(getattr(footprint, "pads", []) or [])
+    ]
+
+    texts: list[dict[str, Any]] = []
+    for item in _as_sequence(getattr(footprint, "texts", []) or []):
+        texts.append(
+            {
+                "kind": type(item).__name__,
+                "name": getattr(item, "name", ""),
+                "value": field_text(item) or _serialize_text_value(item),
+            }
+        )
+
+    fields: dict[str, str] = {}
+    proto = getattr(footprint, "proto", None)
+    for field_name in (
+        "reference_field",
+        "value_field",
+        "datasheet_field",
+        "description_field",
+    ):
+        field = getattr(proto, field_name, None) if proto is not None else None
+        text = getattr(field, "text", None)
+        fields[field_name.removesuffix("_field")] = getattr(text, "value", "")
+
+    return {
+        "id": serialize_library_identifier(getattr(footprint, "id", None)),
+        "anchor": serialize_vector(getattr(footprint, "anchor", None)),
+        "pad_count": len(pads),
+        "pads": pads,
+        "fields": fields,
+        "text_count": len(texts),
+        "texts": texts,
+        "shape_count": len(_as_sequence(getattr(footprint, "shapes", []) or [])),
+        "model_count": len(_as_sequence(getattr(footprint, "models", []) or [])),
+        "private_layers": list(getattr(footprint, "private_layers", []) or []),
     }
 
 

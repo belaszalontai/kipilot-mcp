@@ -224,6 +224,26 @@ added in KiCad 11.
 For a KiCad 10-targeted MCP server, export tools should stay out of the committed
 scope until we intentionally move the project baseline to KiCad 11.
 
+### Library access and placement
+
+KiCad 11 adds library management commands to the IPC API (`GetLibraryItems`,
+`GetItemsFromLibrary`, `GetLibraryStatuses`, `ReloadLibrary`, `LoadAllLibraries`,
+and the placement commands). KiPilot 0.4.0 exposes them as:
+
+- `kicad_lib_list_symbols` / `kicad_lib_list_footprints`
+- `kicad_lib_get_symbol` / `kicad_lib_get_footprint`
+- `kicad_lib_statuses` / `kicad_lib_reload` / `kicad_lib_wait`
+- `kicad_sch_place_symbol_from_library`
+
+These tools report a capability error against a KiCad 10 runtime. The handlers
+are kiface-scoped: symbol libraries need the schematic kiface (Schematic Editor)
+and footprints need the PCB kiface (the KiCad project manager, PCB Editor, or
+Footprint Editor all load it). An eeschema-only endpoint does not register the
+footprint library handler. Library loads are asynchronous, so callers should use
+`kicad_lib_wait` (or poll `kicad_lib_statuses`) before relying on an empty
+listing. The wrapper does not yet expose the proto `SearchLibraries` or
+library-table mutation commands.
+
 ## Recommended MCP Tool Roadmap
 
 ### Phase A: Stable read-only tools

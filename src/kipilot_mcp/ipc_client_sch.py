@@ -17,6 +17,8 @@ from .serializers import (
 # one of them only disables the matching tools instead of the whole server.
 KiCadLibraryIdentifier = optional_import("kipy.common_types", "LibraryIdentifier")
 KiCadText = optional_import("kipy.common_types", "Text")
+KiCadJobsProto = optional_import("kipy.proto.common.types", "jobs_pb2")
+KiCadSchematicJobsProto = optional_import("kipy.proto.schematic", "schematic_jobs_pb2")
 KiCadSchematicProto = optional_import("kipy.proto.schematic", "schematic_types_pb2")
 KiCadBusEntry = optional_import("kipy.schematic_types", "BusEntry")
 KiCadDirectiveLabel = optional_import("kipy.schematic_types", "DirectiveLabel")
@@ -34,6 +36,9 @@ KiCadSchematicPin = optional_import("kipy.schematic_types", "SchematicPin")
 KiCadSchematicRuleArea = optional_import("kipy.schematic_types", "SchematicRuleArea")
 KiCadSchematicSymbol = optional_import("kipy.schematic_types", "SchematicSymbol")
 KiCadSchematicSymbolInstance = optional_import("kipy.schematic_types", "SchematicSymbolInstance")
+KiCadSchematicSymbolOrientation = optional_import(
+    "kipy.schematic_types", "SchematicSymbolOrientation"
+)
 KiCadSchematicTable = optional_import("kipy.schematic_types", "SchematicTable")
 KiCadSchematicTextBox = optional_import("kipy.schematic_types", "SchematicTextBox")
 KiCadSchematicText = optional_import("kipy.schematic_types", "SchematicText")
@@ -46,6 +51,8 @@ if KiCad is not None:
         {
             "kiPy.common_types.LibraryIdentifier": KiCadLibraryIdentifier,
             "kiPy.common_types.Text": KiCadText,
+            "kiPy.proto.common.types.jobs_pb2": KiCadJobsProto,
+            "kiPy.proto.schematic.schematic_jobs_pb2": KiCadSchematicJobsProto,
             "kiPy.proto.schematic.schematic_types_pb2": KiCadSchematicProto,
             "kiPy.schematic_types.BusEntry": KiCadBusEntry,
             "kiPy.schematic_types.DirectiveLabel": KiCadDirectiveLabel,
@@ -63,6 +70,7 @@ if KiCad is not None:
             "kiPy.schematic_types.SchematicRuleArea": KiCadSchematicRuleArea,
             "kiPy.schematic_types.SchematicSymbol": KiCadSchematicSymbol,
             "kiPy.schematic_types.SchematicSymbolInstance": KiCadSchematicSymbolInstance,
+            "kiPy.schematic_types.SchematicSymbolOrientation": KiCadSchematicSymbolOrientation,
             "kiPy.schematic_types.SchematicTable": KiCadSchematicTable,
             "kiPy.schematic_types.SchematicTextBox": KiCadSchematicTextBox,
             "kiPy.schematic_types.SchematicText": KiCadSchematicText,
@@ -124,6 +132,63 @@ SCH_LABEL_SHAPE_FALLBACK = {
     "SLSH_CIRCLE": 7,
     "SLSH_DIAMOND": 8,
     "SLSH_RECTANGLE": 9,
+}
+SCH_SYMBOL_ORIENTATION_NAMES = {
+    "0": "SSO_0",
+    "0deg": "SSO_0",
+    "0_deg": "SSO_0",
+    "sso_0": "SSO_0",
+    "90": "SSO_90",
+    "90deg": "SSO_90",
+    "90_deg": "SSO_90",
+    "sso_90": "SSO_90",
+    "180": "SSO_180",
+    "180deg": "SSO_180",
+    "180_deg": "SSO_180",
+    "sso_180": "SSO_180",
+    "270": "SSO_270",
+    "270deg": "SSO_270",
+    "270_deg": "SSO_270",
+    "sso_270": "SSO_270",
+    "unknown": "SSO_UNKNOWN",
+    "sso_unknown": "SSO_UNKNOWN",
+}
+SCH_SYMBOL_ORIENTATION_FALLBACK = {
+    "SSO_UNKNOWN": 0,
+    "SSO_0": 1,
+    "SSO_90": 2,
+    "SSO_180": 3,
+    "SSO_270": 4,
+}
+SCH_ANTIALIASING_NAMES = {
+    "unknown": "AAM_UNKNOWN",
+    "aam_unknown": "AAM_UNKNOWN",
+    "none": "AAM_NONE",
+    "off": "AAM_NONE",
+    "aam_none": "AAM_NONE",
+    "standard": "AAM_STANDARD",
+    "on": "AAM_STANDARD",
+    "aam_standard": "AAM_STANDARD",
+}
+SCH_ANTIALIASING_FALLBACK = {
+    "AAM_UNKNOWN": 0,
+    "AAM_NONE": 1,
+    "AAM_STANDARD": 2,
+}
+SCH_SHEET_MODE_NAMES = {
+    "unknown": "SJSM_UNKNOWN",
+    "sjsm_unknown": "SJSM_UNKNOWN",
+    "all": "SJSM_ALL_SHEETS",
+    "all_sheets": "SJSM_ALL_SHEETS",
+    "sjsm_all_sheets": "SJSM_ALL_SHEETS",
+    "single": "SJSM_SINGLE_SHEET",
+    "single_sheet": "SJSM_SINGLE_SHEET",
+    "sjsm_single_sheet": "SJSM_SINGLE_SHEET",
+}
+SCH_SHEET_MODE_FALLBACK = {
+    "SJSM_UNKNOWN": 0,
+    "SJSM_ALL_SHEETS": 1,
+    "SJSM_SINGLE_SHEET": 2,
 }
 SCH_CREATABLE_ITEM_TYPES = {
     "wire": KiCadSchematicLine,
@@ -434,6 +499,31 @@ class KiCadSchematicClientMixin:
             default_message="Unable to export the current schematic BOM through the IPC API.",
         )
 
+    async def export_schematic_png(
+        self,
+        output_path: str,
+        plot_settings: dict[str, Any] | None = None,
+        dpi: int | None = None,
+        antialiasing: int | str = "standard",
+        sheet_mode: int | str = "all_sheets",
+    ) -> dict[str, Any]:
+        """Export the current schematic to PNG files."""
+
+        return await self._run_schematic_read(
+            lambda schematic: self._export_schematic_png_job(
+                schematic,
+                output_path=output_path,
+                plot_settings=plot_settings,
+                dpi=dpi,
+                antialiasing=antialiasing,
+                sheet_mode=sheet_mode,
+            ),
+            default_message=(
+                "Unable to export the current schematic to PNG through the IPC API. PNG "
+                "export requires KiCad 11 or newer."
+            ),
+        )
+
     async def get_schematic_selection(self, limit: int = 200) -> dict[str, Any]:
         """Return the current schematic selection."""
 
@@ -517,6 +607,42 @@ class KiCadSchematicClientMixin:
             ),
             default_message="Unable to create schematic items through the IPC API.",
             mutation_name="sch_create_items",
+            dry_run=dry_run,
+            commit_message=commit_message,
+        )
+
+    async def place_schematic_symbol_from_library(
+        self,
+        *,
+        lib_id: str,
+        x_mm: float,
+        y_mm: float,
+        orientation: int | str | None = None,
+        unit: int | None = None,
+        reference: str | None = None,
+        sheet_path: str | None = None,
+        dry_run: bool = False,
+        commit_message: str | None = None,
+    ) -> dict[str, Any]:
+        """Place a symbol from a library onto the current schematic."""
+
+        return await self._run_schematic_write(
+            lambda schematic, is_dry_run: self._place_schematic_symbol_from_library(
+                schematic,
+                lib_id=lib_id,
+                x_mm=x_mm,
+                y_mm=y_mm,
+                orientation=orientation,
+                unit=unit,
+                reference=reference,
+                sheet_path=sheet_path,
+                dry_run=is_dry_run,
+            ),
+            default_message=(
+                "Unable to place a library symbol on the current schematic through the IPC API. "
+                "Library placement requires KiCad 11 or newer."
+            ),
+            mutation_name="sch_place_symbol_from_library",
             dry_run=dry_run,
             commit_message=commit_message,
         )
@@ -1215,6 +1341,37 @@ class KiCadSchematicClientMixin:
             "title_block": serialize_title_block(title_block),
         }
 
+    def _export_schematic_png_job(
+        self,
+        schematic: Any,
+        *,
+        output_path: str,
+        plot_settings: dict[str, Any] | None,
+        dpi: int | None,
+        antialiasing: int | str,
+        sheet_mode: int | str,
+    ) -> dict[str, Any]:
+        resolved_sheet_mode, _sheet_mode_name, output_kind = (
+            self._resolve_schematic_sheet_mode(sheet_mode)
+        )
+        resolved_antialiasing, _antialiasing_name = self._resolve_schematic_antialiasing(
+            antialiasing
+        )
+        resolved_dpi = self._resolve_schematic_png_dpi(dpi)
+
+        return self._export_schematic_plot_job(
+            schematic,
+            method_name="export_png",
+            format_name="png",
+            output_path=output_path,
+            output_kind=output_kind,
+            path_argument_name="output_path",
+            plot_settings=plot_settings,
+            dpi=resolved_dpi,
+            antialiasing=resolved_antialiasing,
+            sheet_mode=resolved_sheet_mode,
+        )
+
     def _export_schematic_plot_job(
         self,
         schematic: Any,
@@ -1247,6 +1404,7 @@ class KiCadSchematicClientMixin:
         call_kwargs.update(options)
 
         job_result = export_method(validated_output_path, **call_kwargs)
+        self._assert_schematic_job_succeeded(job_result, job_name=format_name)
         result = {
             "ok": True,
             "schematic": self._serialize_schematic(schematic),
@@ -1295,6 +1453,7 @@ class KiCadSchematicClientMixin:
             format=resolved_netlist_format,
             variant_name=resolved_variant_name,
         )
+        self._assert_schematic_job_succeeded(job_result, job_name="netlist")
         return {
             "ok": True,
             "schematic": self._serialize_schematic(schematic),
@@ -1331,7 +1490,24 @@ class KiCadSchematicClientMixin:
             path_argument_name="output_file",
         )
         resolved_format_settings = self._create_schematic_bom_format_settings(format_settings)
+        if resolved_format_settings is None:
+            # kipy requires a concrete BOMFormatSettings (KiCad 11 wrappers copy it
+            # unconditionally); default to KiCad's built-in CSV preset.
+            resolved_format_settings = self._default_schematic_bom_format_settings()
         resolved_field_settings = self._create_schematic_bom_field_settings(field_settings)
+        if resolved_field_settings is None:
+            # KiCad 11 rejects BOM jobs that specify neither a fields preset nor an
+            # explicit field list, so supply a sensible default column set.
+            resolved_field_settings = self._default_schematic_bom_field_settings()
+        elif not str(getattr(resolved_field_settings, "preset_name", "") or "").strip() and not list(
+            getattr(resolved_field_settings, "fields", []) or []
+        ):
+            # Keep user-supplied sort/filter settings, but make sure the required
+            # field selection is present.
+            default_field_settings = self._default_schematic_bom_field_settings()
+            resolved_field_settings.fields = default_field_settings.fields
+            if not str(getattr(resolved_field_settings, "sort_field", "") or "").strip():
+                resolved_field_settings.sort_field = default_field_settings.sort_field
 
         if not isinstance(exclude_dnp, bool):
             raise KiCadLookupError("exclude_dnp must be a boolean.")
@@ -1347,6 +1523,7 @@ class KiCadSchematicClientMixin:
             group_symbols=group_symbols,
             variant_name=resolved_variant_name,
         )
+        self._assert_schematic_job_succeeded(job_result, job_name="bom")
         return {
             "ok": True,
             "schematic": self._serialize_schematic(schematic),
@@ -1818,6 +1995,117 @@ class KiCadSchematicClientMixin:
 
         return instance
 
+    def _place_schematic_symbol_from_library(
+        self,
+        schematic: Any,
+        *,
+        lib_id: str,
+        x_mm: float,
+        y_mm: float,
+        orientation: int | str | None,
+        unit: int | None,
+        reference: str | None,
+        sheet_path: str | None,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        place = getattr(schematic, "place_symbol_from_library", None)
+        if not callable(place):
+            raise KiCadCapabilityError(
+                "The active KiCad schematic does not expose place_symbol_from_library(). "
+                "Library placement requires KiCad 11 or newer."
+            )
+
+        normalized_lib_id = self._normalize_library_identifier(lib_id)
+        resolved_orientation, orientation_name = self._resolve_schematic_symbol_orientation(
+            orientation
+        )
+
+        resolved_unit = None
+        if unit is not None:
+            if isinstance(unit, bool) or not isinstance(unit, int) or unit < 1:
+                raise KiCadLookupError("unit must be a positive integer.")
+            resolved_unit = unit
+
+        resolved_reference = None
+        if reference is not None:
+            resolved_reference = str(reference).strip()
+            if not resolved_reference:
+                raise KiCadLookupError(
+                    "reference must be a non-empty string when provided."
+                )
+
+        resolved_sheet_path = None
+        if sheet_path is not None:
+            resolved_sheet_path = self._resolve_schematic_sheet_path(schematic, sheet_path)
+
+        position = self._schematic_vector(
+            schematic,
+            self._millimeters_to_nanometers(float(x_mm)),
+            self._millimeters_to_nanometers(float(y_mm)),
+        )
+
+        preview = {
+            "lib_id": normalized_lib_id,
+            "x_mm": float(x_mm),
+            "y_mm": float(y_mm),
+            "orientation": orientation_name,
+            "orientation_value": resolved_orientation,
+            "unit": resolved_unit,
+            "reference": resolved_reference,
+            "sheet_path": sheet_path,
+        }
+        if dry_run:
+            return {"placed": None, **preview}
+
+        item = place(
+            normalized_lib_id,
+            position,
+            orientation=resolved_orientation,
+            unit=resolved_unit,
+            reference=resolved_reference,
+            sheet_path=resolved_sheet_path,
+        )
+        return {"placed": serialize_schematic_item(item), **preview}
+
+    def _resolve_schematic_sheet_path(self, schematic: Any, sheet_path: str) -> Any:
+        get_hierarchy = getattr(schematic, "get_hierarchy", None)
+        if not callable(get_hierarchy):
+            raise KiCadCapabilityError(
+                "The active KiCad schematic does not expose get_hierarchy()."
+            )
+
+        wanted = str(sheet_path).strip()
+        if not wanted:
+            raise KiCadLookupError(
+                "sheet_path must be a non-empty string when provided."
+            )
+
+        try:
+            sheets = list(get_hierarchy())
+        except Exception as exc:  # noqa: BLE001 - surface hierarchy errors to the client
+            raise KiCadLookupError(
+                f"Unable to read the schematic hierarchy: {exc}"
+            ) from exc
+
+        for sheet in sheets:
+            path = getattr(sheet, "path", None)
+            if path is None:
+                continue
+            human_readable = str(getattr(path, "path_human_readable", "") or "")
+            identifiers = "/" + "/".join(
+                str(getattr(identifier, "value", identifier))
+                for identifier in getattr(path, "path", []) or []
+            )
+            name = str(getattr(sheet, "name", "") or "")
+            for candidate in (human_readable, identifiers, name):
+                if candidate and candidate.lower() == wanted.lower():
+                    return path
+
+        raise KiCadLookupError(
+            f"No schematic sheet matches sheet_path {sheet_path!r}. Use "
+            "kicad_sch_get_hierarchy to list the available sheet paths."
+        )
+
     def _create_schematic_symbol_definition(self, lib_id: str) -> Any:
         if KiCadSchematicSymbol is None or KiCadLibraryIdentifier is None:
             return None
@@ -1970,16 +2258,167 @@ class KiCadSchematicClientMixin:
         return bool(spec.get("locked"))
 
     def _schematic_enum_value(self, enum_name: str, member_name: str, *, fallback: int) -> int:
-        proto = KiCadSchematicProto
-        if proto is None:
-            return fallback
+        return self._module_enum_value(
+            KiCadSchematicProto,
+            enum_name,
+            member_name,
+            fallback=fallback,
+        )
 
-        enum_type = getattr(proto, enum_name, None)
+    def _module_enum_value(
+        self,
+        module: Any,
+        enum_name: str,
+        member_name: str,
+        *,
+        fallback: int,
+    ) -> int:
+        enum_type = getattr(module, enum_name, None) if module is not None else None
         member = getattr(enum_type, member_name, None) if enum_type is not None else None
         if member is None:
             return fallback
 
         return int(member)
+
+    def _resolve_schematic_symbol_orientation(
+        self,
+        value: Any,
+    ) -> tuple[int | None, str | None]:
+        if value is None:
+            return None, None
+
+        if isinstance(value, bool):
+            raise KiCadLookupError(
+                "orientation must be one of: 0, 90, 180, 270."
+            )
+
+        if isinstance(value, int):
+            resolved = value
+        else:
+            normalized = str(value).strip().lower()
+            if normalized.lstrip("-").isdigit():
+                resolved = int(normalized)
+            else:
+                member = SCH_SYMBOL_ORIENTATION_NAMES.get(normalized)
+                if member is None:
+                    raise KiCadLookupError(
+                        "Unsupported symbol orientation "
+                        f"{value!r}. Supported values: 0, 90, 180, 270."
+                    )
+                resolved = self._module_enum_value(
+                    KiCadSchematicProto,
+                    "SchematicSymbolOrientation",
+                    member,
+                    fallback=SCH_SYMBOL_ORIENTATION_FALLBACK[member],
+                )
+
+        # Accept both the raw enum values (SSO_0=1 ... SSO_270=4) and degrees.
+        orientation_degrees = {0: 1, 90: 2, 180: 3, 270: 4}
+        if resolved in orientation_degrees:
+            degrees = resolved
+            resolved = orientation_degrees[resolved]
+        else:
+            degrees = {1: 0, 2: 90, 3: 180, 4: 270}.get(resolved)
+
+        if degrees is None:
+            raise KiCadLookupError("orientation must be one of: 0, 90, 180, 270.")
+
+        return resolved, str(degrees)
+
+    def _resolve_schematic_antialiasing(self, value: Any) -> tuple[int, str]:
+        if isinstance(value, bool):
+            raise KiCadLookupError("antialiasing must be one of: none, standard.")
+
+        if value is None:
+            member = "AAM_STANDARD"
+        elif isinstance(value, int):
+            resolved = value
+            member = None
+        else:
+            normalized = str(value).strip().lower()
+            if normalized.lstrip("-").isdigit():
+                resolved = int(normalized)
+                member = None
+            else:
+                member = SCH_ANTIALIASING_NAMES.get(normalized)
+                if member is None:
+                    raise KiCadLookupError(
+                        "Unsupported antialiasing "
+                        f"{value!r}. Supported values: none, standard."
+                    )
+                resolved = self._module_enum_value(
+                    KiCadJobsProto,
+                    "AntialiasingMode",
+                    member,
+                    fallback=SCH_ANTIALIASING_FALLBACK[member],
+                )
+
+        if member is not None:
+            resolved = self._module_enum_value(
+                KiCadJobsProto,
+                "AntialiasingMode",
+                member,
+                fallback=SCH_ANTIALIASING_FALLBACK[member],
+            )
+
+        antialiasing_names = {0: "unknown", 1: "none", 2: "standard"}
+        if resolved not in antialiasing_names:
+            raise KiCadLookupError("antialiasing must be one of: none, standard.")
+
+        return resolved, antialiasing_names[resolved]
+
+    def _resolve_schematic_sheet_mode(self, value: Any) -> tuple[int, str, str]:
+        if value is None:
+            member = "SJSM_ALL_SHEETS"
+            resolved = self._module_enum_value(
+                KiCadSchematicJobsProto,
+                "SchematicJobSheetMode",
+                member,
+                fallback=SCH_SHEET_MODE_FALLBACK[member],
+            )
+        elif isinstance(value, bool):
+            raise KiCadLookupError("sheet_mode must be one of: all_sheets, single_sheet.")
+        elif isinstance(value, int):
+            resolved = value
+        else:
+            normalized = str(value).strip().lower()
+            if normalized.lstrip("-").isdigit():
+                resolved = int(normalized)
+            else:
+                member = SCH_SHEET_MODE_NAMES.get(normalized)
+                if member is None or SCH_SHEET_MODE_FALLBACK[member] == 0:
+                    raise KiCadLookupError(
+                        "Unsupported sheet_mode "
+                        f"{value!r}. Supported values: all_sheets, single_sheet."
+                    )
+                resolved = self._module_enum_value(
+                    KiCadSchematicJobsProto,
+                    "SchematicJobSheetMode",
+                    member,
+                    fallback=SCH_SHEET_MODE_FALLBACK[member],
+                )
+
+        if resolved == SCH_SHEET_MODE_FALLBACK["SJSM_ALL_SHEETS"]:
+            return resolved, "all_sheets", "directory"
+        if resolved == SCH_SHEET_MODE_FALLBACK["SJSM_SINGLE_SHEET"]:
+            return resolved, "single_sheet", "file"
+
+        raise KiCadLookupError("sheet_mode must be one of: all_sheets, single_sheet.")
+
+    def _resolve_schematic_png_dpi(self, dpi: Any) -> int | None:
+        if dpi is None:
+            return None
+
+        if isinstance(dpi, bool):
+            raise KiCadLookupError("dpi must be an integer between 72 and 2400.")
+        if isinstance(dpi, str) and dpi.strip().isdigit():
+            dpi = int(dpi.strip())
+        if not isinstance(dpi, int):
+            raise KiCadLookupError("dpi must be an integer between 72 and 2400.")
+        if dpi < 72 or dpi > 2400:
+            raise KiCadLookupError("dpi must be an integer between 72 and 2400.")
+
+        return dpi
 
     def _resolve_schematic_spin_style(self, value: Any, *, label: str) -> int | None:
         if value is None:
@@ -2728,6 +3167,7 @@ class KiCadSchematicClientMixin:
             "ref_range_delimiter",
             "keep_tabs",
             "keep_line_breaks",
+            "include_byte_order_mark",
         }
         unknown_fields = sorted(set(format_settings) - supported_fields)
         if unknown_fields:
@@ -2748,7 +3188,7 @@ class KiCadSchematicClientMixin:
             if field_name in format_settings and format_settings[field_name] is not None:
                 setattr(result, field_name, str(format_settings[field_name]))
 
-        for field_name in ("keep_tabs", "keep_line_breaks"):
+        for field_name in ("keep_tabs", "keep_line_breaks", "include_byte_order_mark"):
             if field_name not in format_settings or format_settings[field_name] is None:
                 continue
 
@@ -2758,6 +3198,55 @@ class KiCadSchematicClientMixin:
             setattr(result, field_name, field_value)
 
         return result
+
+    def _default_schematic_bom_format_settings(self) -> Any:
+        try:
+            from kipy.schematic_jobs import BOM_FORMAT_CSV as KiCadBomFormatCsv
+        except (ImportError, ModuleNotFoundError):
+            KiCadBomFormatCsv = None
+
+        if KiCadBomFormatCsv is not None:
+            return KiCadBomFormatCsv
+
+        result = self._create_schematic_bom_format_settings(
+            {
+                "field_delimiter": ",",
+                "string_delimiter": '"',
+                "ref_delimiter": ",",
+            }
+        )
+        if result is None:
+            raise KiCadCapabilityError(
+                "The installed kicad-python runtime does not expose BOM format settings."
+            )
+        return result
+
+    def _default_schematic_bom_field_settings(self) -> Any:
+        """Return an explicit BOM field set accepted by KiCad 11 export jobs."""
+
+        return self._create_schematic_bom_field_settings(
+            {
+                "sort_field": "Reference",
+                "fields": [
+                    {"name": "Reference", "label": "Reference", "group_by": False},
+                    {"name": "Value", "label": "Value", "group_by": True},
+                    {"name": "Footprint", "label": "Footprint", "group_by": True},
+                    {"name": "Datasheet", "label": "Datasheet", "group_by": False},
+                    {"name": "${QUANTITY}", "label": "Qty", "group_by": False},
+                    {"name": "${DNP}", "label": "DNP", "group_by": True},
+                ],
+            }
+        )
+
+    def _assert_schematic_job_succeeded(self, job_result: Any, *, job_name: str) -> None:
+        """Raise a clear error when a KiCad schematic export job reports failure."""
+
+        if job_result is None or getattr(job_result, "succeeded", True):
+            return
+
+        message = str(getattr(job_result, "message", "") or "").strip()
+        detail = f": {message}" if message else ""
+        raise KiCadLookupError(f"KiCad {job_name} job failed{detail}")
 
     def _create_schematic_bom_field_settings(
         self,
@@ -2785,6 +3274,7 @@ class KiCadSchematicClientMixin:
             "sort_field",
             "sort_direction",
             "filter",
+            "filter_scope",
         }
         unknown_fields = sorted(set(field_settings) - supported_fields)
         if unknown_fields:
@@ -2803,6 +3293,12 @@ class KiCadSchematicClientMixin:
             result.sort_direction = self._coerce_enum_value(
                 field_settings["sort_direction"],
                 field_name="field_settings.sort_direction",
+            )
+
+        if "filter_scope" in field_settings and field_settings["filter_scope"] is not None:
+            result.filter_scope = self._coerce_enum_value(
+                field_settings["filter_scope"],
+                field_name="field_settings.filter_scope",
             )
 
         if "fields" in field_settings and field_settings["fields"] is not None:

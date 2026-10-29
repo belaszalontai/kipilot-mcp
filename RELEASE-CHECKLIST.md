@@ -45,7 +45,7 @@ Use this checklist when publishing a Windows executable release.
 - Download the published ZIP from GitHub Releases.
 - Extract it on a clean Windows machine or VM.
 - Confirm the extracted build starts: `kipilot-mcp.exe` must answer the MCP `initialize` handshake and
-  report 135 tools (`python scripts/smoke_test_binary.py <extracted>/kipilot-mcp.exe`).
+  report 144 tools (`python scripts/smoke_test_binary.py <extracted>/kipilot-mcp.exe`).
 - Start KiCad, point an MCP host at `kipilot-mcp.exe`, and run `ping_kicad`.
 - Verify logs still go to `stderr` or the configured log file, never to `stdout`.
 
